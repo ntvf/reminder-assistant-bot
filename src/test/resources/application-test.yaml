@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:15:///reminder
+    username: test
+    password: test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+  liquibase:
+    enabled: false
+  quartz:
+    job-store-type: memory
+
+app:
+  max-reminders-per-chat: 10
+
+telegram:
+  bot-token: test-token
+  bot-username: test-bot
+
+telegrambots:
+  enabled: false
+
+spring.ai.openai:
+  api-key: test-key
+  chat:
+    options:
+      model: gpt-4o-mini
