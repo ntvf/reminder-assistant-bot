@@ -11,7 +11,7 @@ public final class BotMessages {
         WRONG, INVALID_ID, UNKNOWN_CMD, MAX_REMINDERS, OFFTOPIC, RATE_LIMITED, START,
         ASK_TIMEZONE, TZ_DETECTED, TZ_CONFIRMED, TZ_CHOOSE_REGION,
         TZ_LOCATING, TZ_CHOOSE_DIFFERENTLY, TZ_SHARE_LOCATION,
-        BTN_LIST, BTN_CHANGE_TZ, BTN_CANCEL,
+        BTN_LIST, BTN_CHANGE_TZ, BTN_CANCEL, BTN_CONFIRM_DELETE,
         REMINDER_FIRED
     }
 
@@ -44,6 +44,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 My Reminders"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Change Timezone"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancel"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Yes, delete"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")    );
 
     private static final Map<Key, String> RU = Map.ofEntries(
@@ -75,6 +76,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Мои напоминания"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Изменить часовой пояс"),
         Map.entry(Key.BTN_CANCEL, "✖️ Отмена"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Да, удалить"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -107,6 +109,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Meine Erinnerungen"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Zeitzone ändern"),
         Map.entry(Key.BTN_CANCEL, "✖️ Abbrechen"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Ja, löschen"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -139,6 +142,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Mes rappels"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Changer de fuseau"),
         Map.entry(Key.BTN_CANCEL, "✖️ Annuler"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Oui, supprimer"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -171,6 +175,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Mis recordatorios"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Cambiar zona horaria"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancelar"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sí, eliminar"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -203,6 +208,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Os meus lembretes"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Alterar fuso horário"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancelar"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sim, excluir"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -235,6 +241,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 I miei promemoria"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Cambia fuso orario"),
         Map.entry(Key.BTN_CANCEL, "✖️ Annulla"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sì, elimina"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -267,6 +274,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Hatırlatmalarım"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Saat dilimini değiştir"),
         Map.entry(Key.BTN_CANCEL, "✖️ İptal"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Evet, sil"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -299,6 +307,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Moje przypomnienia"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Zmień strefę czasową"),
         Map.entry(Key.BTN_CANCEL, "✖️ Anuluj"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Tak, usuń"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 
@@ -331,6 +340,7 @@ public final class BotMessages {
         Map.entry(Key.BTN_LIST, "📋 Мої нагадування"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Змінити часовий пояс"),
         Map.entry(Key.BTN_CANCEL, "✖️ Скасувати"),
+        Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Так, видалити"),
         Map.entry(Key.REMINDER_FIRED, "⏰ %s")
     );
 

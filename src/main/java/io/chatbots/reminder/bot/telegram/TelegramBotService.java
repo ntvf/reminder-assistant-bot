@@ -373,6 +373,42 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
 
         if (data == null) return;
 
+        if (data.startsWith("del:confirm:")) {
+            try {
+                long reminderId = Long.parseLong(data.substring("del:confirm:".length()));
+                var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+                var displayLang = lang != null ? lang : languageCode;
+                var confirmRow = new InlineKeyboardRow();
+                confirmRow.add(InlineKeyboardButton.builder()
+                    .text(BotMessages.get(BotMessages.Key.BTN_CONFIRM_DELETE, displayLang))
+                    .callbackData("del:" + reminderId)
+                    .build());
+                confirmRow.add(InlineKeyboardButton.builder()
+                    .text(BotMessages.get(BotMessages.Key.BTN_CANCEL, displayLang))
+                    .callbackData("del:cancel")
+                    .build());
+                editInlineKeyboard(chatId, messageId, null,
+                    InlineKeyboardMarkup.builder().keyboard(List.of(confirmRow)).build());
+            } catch (Exception e) {
+                log.warn("Failed to show delete confirm in chat {}: {}", chatId, e.getMessage());
+            }
+            return;
+        }
+
+        if ("del:cancel".equals(data)) {
+            try {
+                var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
+                var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
+                editInlineKeyboard(chatId, messageId, updatedText,
+                    reminders.isEmpty()
+                        ? InlineKeyboardMarkup.builder().keyboard(List.of()).build()
+                        : buildDeleteKeyboard(reminders));
+            } catch (Exception e) {
+                log.warn("Failed to restore list keyboard in chat {}: {}", chatId, e.getMessage());
+            }
+            return;
+        }
+
         if (data.startsWith("del:")) {
             try {
                 long reminderId = Long.parseLong(data.substring("del:".length()));
@@ -451,7 +487,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             var row = new InlineKeyboardRow();
             row.add(InlineKeyboardButton.builder()
                 .text("🗑 " + label)
-                .callbackData("del:" + reminder.getId())
+                .callbackData("del:confirm:" + reminder.getId())
                 .build());
             rows.add(row);
         }
@@ -517,13 +553,22 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
 
     private void editInlineKeyboard(String chatId, int messageId, String text, InlineKeyboardMarkup keyboard) {
         try {
-            telegramClient.execute(
-                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText.builder()
-                    .chatId(chatId)
-                    .messageId(messageId)
-                    .text(text)
-                    .replyMarkup(keyboard)
-                    .build());
+            if (text == null) {
+                telegramClient.execute(
+                    EditMessageReplyMarkup.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .replyMarkup(keyboard)
+                        .build());
+            } else {
+                telegramClient.execute(
+                    org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text(text)
+                        .replyMarkup(keyboard)
+                        .build());
+            }
         } catch (TelegramApiException e) {
             log.warn("Failed to edit message {} in chat {}: {}", messageId, chatId, e.getMessage());
         }
