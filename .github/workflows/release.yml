@@ -42,7 +42,7 @@ jobs:
                   missed, covered = int(c.get('missed')), int(c.get('covered'))
                   print(f'{round(covered / (missed + covered) * 100, 1)}%')
                   break
-          ")** (quality gate: 50%)" >> $GITHUB_STEP_SUMMARY
+          ")** (quality gate: 38% branch)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Class | Lines covered |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY

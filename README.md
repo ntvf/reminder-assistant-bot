@@ -26,7 +26,7 @@ A Telegram bot that understands natural language reminders and schedules them us
 ## Coverage & quality gate
 
 Coverage report and per-class breakdown are published to each [workflow run summary](https://github.com/ntvf/reminder-assistant-bot/actions/workflows/release.yml) and tracked on [Codecov](https://codecov.io/gh/ntvf/reminder-assistant-bot).
-Quality gate: **50% line coverage** minimum — build fails if not met.
+Quality gate: **38% branch coverage** minimum on business logic classes — build fails if not met. Data classes, entities, configs, and framework adapter layers are excluded from the gate.
 
 **Checkstyle** runs on every build and fails on: unused/redundant/star imports, string equality via `==`, boolean simplification, fall-through in switch, multiple variable declarations per line.
 
