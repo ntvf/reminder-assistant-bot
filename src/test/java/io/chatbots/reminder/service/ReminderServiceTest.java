@@ -159,10 +159,11 @@ class ReminderServiceTest {
         var reminder = new Reminder();
         setReminderIdViaReflection(reminder, 42L);
         reminder.setChatUser(chatUser);
+        reminder.setReminderText("Call dentist");
         when(reminderRepository.findById(42L)).thenReturn(Optional.of(reminder));
 
         var result = reminderService.deleteReminder("123", MessengerType.TELEGRAM, 42L);
-        assertThat(result).contains("✅").contains("42");
+        assertThat(result).contains("✅").contains("Call dentist");
         verify(reminderRepository).save(reminder);
         assertThat(reminder.isActive()).isFalse();
     }
