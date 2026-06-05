@@ -208,7 +208,7 @@ public class ReminderService {
 
         var sb = new StringBuilder(BotMessages.get(BotMessages.Key.REMINDERS_HEADER, languageCode)).append("\n\n");
         for (var reminder : reminders) {
-            sb.append("🔔 [").append(reminder.getId()).append("] ").append(reminder.getReminderText()).append("\n");
+            sb.append("🔔 ").append(reminder.getReminderText()).append("\n");
             sb.append("   📅 ").append(reminder.getScheduleDescription());
             long secs = secondsUntilNextFire(reminder, chatUser.getTimezone());
             if (secs > 0) {

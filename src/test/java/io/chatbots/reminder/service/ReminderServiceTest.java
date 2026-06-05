@@ -147,7 +147,7 @@ class ReminderServiceTest {
         when(reminderRepository.findByChatUserAndActiveTrue(chatUser)).thenReturn(List.of(r1));
 
         var result = reminderService.listReminders("123", MessengerType.TELEGRAM);
-        assertThat(result).contains("[1]").contains("Feed the leaven").contains("Every Friday");
+        assertThat(result).contains("Feed the leaven").contains("Every Friday");
     }
 
     @Test
