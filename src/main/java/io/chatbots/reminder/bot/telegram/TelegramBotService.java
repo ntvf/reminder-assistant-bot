@@ -35,6 +35,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
+import io.chatbots.reminder.domain.Reminder;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -243,11 +244,11 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 }
             } else if (text.startsWith("/list")) {
                 var listText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
-                var reminderIds = reminderService.getActiveReminderIds(chatId, MessengerType.TELEGRAM);
-                if (reminderIds.isEmpty()) {
+                var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
+                if (reminders.isEmpty()) {
                     send(chatId, listText);
                 } else {
-                    sendWithMarkup(chatId, listText, buildDeleteKeyboard(reminderIds));
+                    sendWithMarkup(chatId, listText, buildDeleteKeyboard(reminders));
                 }
             } else if (text.startsWith("/delete ")) {
                 var parts = text.split("\\s+", 2);
@@ -377,15 +378,15 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 long reminderId = Long.parseLong(data.substring("del:".length()));
                 var result = reminderService.deleteReminder(chatId, MessengerType.TELEGRAM, reminderId);
                 // Refresh the list message with updated reminders
-                var ids = reminderService.getActiveReminderIds(chatId, MessengerType.TELEGRAM);
-                if (ids.isEmpty()) {
+                var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
+                if (reminders.isEmpty()) {
                     var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
                     editInlineKeyboard(chatId, messageId,
                         result + "\n\n" + BotMessages.get(BotMessages.Key.NO_REMINDERS, lang),
                         InlineKeyboardMarkup.builder().keyboard(List.of()).build());
                 } else {
                     var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
-                    editInlineKeyboard(chatId, messageId, updatedText, buildDeleteKeyboard(ids));
+                    editInlineKeyboard(chatId, messageId, updatedText, buildDeleteKeyboard(reminders));
                 }
             } catch (Exception e) {
                 log.warn("Failed to delete reminder via button in chat {}: {}", chatId, e.getMessage());
@@ -442,20 +443,18 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             .build();
     }
 
-    private InlineKeyboardMarkup buildDeleteKeyboard(List<Long> ids) {
+    private InlineKeyboardMarkup buildDeleteKeyboard(List<Reminder> reminders) {
         var rows = new ArrayList<InlineKeyboardRow>();
-        var row = new InlineKeyboardRow();
-        for (var id : ids) {
+        for (var reminder : reminders) {
+            var label = reminder.getReminderText();
+            if (label.length() > 32) label = label.substring(0, 30) + "…";
+            var row = new InlineKeyboardRow();
             row.add(InlineKeyboardButton.builder()
-                .text("🗑 " + id)
-                .callbackData("del:" + id)
+                .text("🗑 " + label)
+                .callbackData("del:" + reminder.getId())
                 .build());
-            if (row.size() == 3) {
-                rows.add(new InlineKeyboardRow(row));
-                row.clear();
-            }
+            rows.add(row);
         }
-        if (!row.isEmpty()) rows.add(new InlineKeyboardRow(row));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 

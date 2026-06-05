@@ -351,4 +351,10 @@ public class ReminderService {
                 .stream().map(Reminder::getId).toList())
             .orElse(List.of());
     }
+
+    public List<Reminder> getActiveReminders(String chatId, MessengerType messengerType) {
+        return chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType)
+            .map(user -> reminderRepository.findByChatUserAndActiveTrue(user))
+            .orElse(List.of());
+    }
 }
