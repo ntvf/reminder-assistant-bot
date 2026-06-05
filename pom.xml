@@ -183,9 +183,9 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
                     <element>BUNDLE</element>
                     <limits>
                         <limit>
-                            <counter>LINE</counter>
+                            <counter>BRANCH</counter>
                             <value>COVEREDRATIO</value>
-                            <minimum>0.50</minimum>
+                            <minimum>0.80</minimum>
                         </limit>
                     </limits>
                 </rule>
