@@ -1,6 +1,8 @@
 # Reminder Assistant Bot
 
 ![Build & Release](https://github.com/ntvf/reminder-assistant-bot/actions/workflows/release.yml/badge.svg)
+![CodeQL](https://github.com/ntvf/reminder-assistant-bot/actions/workflows/codeql.yml/badge.svg)
+[![Coverage](https://codecov.io/gh/ntvf/reminder-assistant-bot/branch/main/graph/badge.svg)](https://codecov.io/gh/ntvf/reminder-assistant-bot)
 
 A Telegram bot that understands natural language reminders and schedules them using AI. Tell it "remind me every Friday to feed the leaven" or "remind me tomorrow to call the dentist" — it parses the intent, extracts timing, and fires the reminder at the right time.
 
@@ -23,8 +25,14 @@ A Telegram bot that understands natural language reminders and schedules them us
 
 ## Coverage & quality gate
 
-Coverage report and per-class breakdown are published to each [workflow run summary](https://github.com/ntvf/reminder-assistant-bot/actions/workflows/release.yml).
+Coverage report and per-class breakdown are published to each [workflow run summary](https://github.com/ntvf/reminder-assistant-bot/actions/workflows/release.yml) and tracked on [Codecov](https://codecov.io/gh/ntvf/reminder-assistant-bot).
 Quality gate: **50% line coverage** minimum — build fails if not met.
+
+**Checkstyle** runs on every build and fails on: unused/redundant/star imports, string equality via `==`, boolean simplification, fall-through in switch, multiple variable declarations per line.
+
+**OWASP Dependency Check** runs in parallel and fails on any dependency with CVSS ≥ 7. Add `NVD_API_KEY` secret (free at nvd.nist.gov) to speed up NVD database updates.
+
+**CodeQL** runs on every push to `main` and weekly — security findings appear in the repository Security tab.
 
 ## Deployment
 

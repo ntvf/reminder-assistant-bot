@@ -421,7 +421,8 @@ public final class BotMessages {
     }
 
     private static String slavic(long n, int unit, String prefix, String[][] forms) {
-        long m10 = n % 10, m100 = n % 100;
+        long m10 = n % 10;
+        long m100 = n % 100;
         int form = (m100 >= 11 && m100 <= 19) ? 2 : (m10 == 1 ? 0 : (m10 >= 2 && m10 <= 4 ? 1 : 2));
         return prefix + " " + n + " " + forms[unit][form];
     }

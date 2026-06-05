@@ -121,6 +121,34 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
 <artifactId>spring-boot-maven-plugin</artifactId>
 </plugin>
 <plugin>
+<groupId>org.apache.maven.plugins</groupId>
+<artifactId>maven-checkstyle-plugin</artifactId>
+<version>3.6.0</version>
+<configuration>
+    <configLocation>checkstyle.xml</configLocation>
+    <failsOnError>true</failsOnError>
+    <violationSeverity>error</violationSeverity>
+    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+</configuration>
+<executions>
+    <execution>
+        <id>checkstyle</id>
+        <phase>verify</phase>
+        <goals><goal>check</goal></goals>
+    </execution>
+</executions>
+</plugin>
+<plugin>
+<groupId>org.owasp</groupId>
+<artifactId>dependency-check-maven</artifactId>
+<version>12.1.1</version>
+<configuration>
+    <failBuildOnCVSS>7</failBuildOnCVSS>
+    <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+    <dataDirectory>${user.home}/.dependency-check-data</dataDirectory>
+</configuration>
+</plugin>
+<plugin>
 <groupId>org.jacoco</groupId>
 <artifactId>jacoco-maven-plugin</artifactId>
 <version>0.8.13</version>
