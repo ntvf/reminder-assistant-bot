@@ -1,9 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
-    <!-- Add suppressions here for false positives, e.g.:
-    <suppress>
-        <notes>False positive: CVE-XXXX-YYYY does not apply because ...</notes>
-        <cve>CVE-XXXX-YYYY</cve>
-    </suppress>
+
+    <!--
+        FALSE POSITIVES — Telegram Java bot library (telegrambots-meta 9.3.0)
+        OWASP CPE matching hits cpe:2.3:a:telegram:telegram:9.3.0 based on the version number,
+        but these CVEs describe vulnerabilities in the Telegram desktop/mobile application,
+        not the Java bot API library. No code path from this library is affected.
     -->
+    <suppress>
+        <notes>False positive: CVE-2019-10044 affects Telegram desktop client, not the Java bot library.</notes>
+        <packageUrl regex="true">^pkg:maven/org\.telegram/.*$</packageUrl>
+        <cve>CVE-2019-10044</cve>
+    </suppress>
+    <suppress>
+        <notes>False positive: CVE-2024-7014 affects Telegram desktop client, not the Java bot library.</notes>
+        <packageUrl regex="true">^pkg:maven/org\.telegram/.*$</packageUrl>
+        <cve>CVE-2024-7014</cve>
+    </suppress>
+
+    <!--
+        Netty 4.2.12 — transitive dependency managed by Spring Boot 4.0.6.
+        No patched version available as of 2026-06-06. Suppressed until 2026-09-06
+        to force re-evaluation when a fix is released upstream.
+        Track: https://github.com/netty/netty/security/advisories
+    -->
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42581</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42582</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42583</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42584</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42585</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42577</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42578</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42579</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42586</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-42587</cve>
+    </suppress>
+    <suppress until="2026-09-06Z">
+        <notes>Netty 4.2.12 CVEs — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/io\.netty/.*$</packageUrl>
+        <cve>CVE-2026-44248</cve>
+    </suppress>
+
+    <!--
+        PostgreSQL JDBC 42.7.10 — managed by Spring Boot 4.0.6.
+        No patched version available as of 2026-06-06. Re-evaluate on expiry.
+        Track: https://github.com/pgjdbc/pgjdbc/security/advisories
+    -->
+    <suppress until="2026-09-06Z">
+        <notes>PostgreSQL JDBC 42.7.10 CVE — no patched version available; managed by Spring Boot. Re-evaluate on expiry.</notes>
+        <packageUrl regex="true">^pkg:maven/org\.postgresql/postgresql@.*$</packageUrl>
+        <cve>CVE-2026-42198</cve>
+    </suppress>
+
 </suppressions>
