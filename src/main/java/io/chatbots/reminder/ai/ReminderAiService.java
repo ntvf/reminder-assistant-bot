@@ -70,8 +70,9 @@ public class ReminderAiService {
         var now = LocalDateTime.now(zoneId);
         var systemPrompt = promptSanitizerService.buildSystemPrompt(languageCode);
 
-        // Temporal context goes in user message — keeps system prompt static for prompt caching
-        var temporalContext = "[Temporal context: " + now + " | Timezone: " + timezone + "]\n";
+        var langName = promptSanitizerService.resolveLanguageName(languageCode);
+        // Temporal context + language in user message — keeps system prompt fully static for prompt caching
+        var temporalContext = "[Temporal context: " + now + " | Timezone: " + timezone + " | Language: " + langName + "]\n";
 
         return chatClient.prompt()
             .system(systemPrompt)

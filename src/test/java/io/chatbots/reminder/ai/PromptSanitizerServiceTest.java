@@ -89,7 +89,7 @@ class PromptSanitizerServiceTest {
         var result = service.buildSystemPrompt("en");
         assertThat(result).contains("Temporal context");
         assertThat(result).contains("JSON");
-        assertThat(result).contains("English");
+        assertThat(result).contains("Language");
     }
 
     @Test

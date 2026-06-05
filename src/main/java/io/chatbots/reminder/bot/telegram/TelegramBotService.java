@@ -109,6 +109,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     // All translations of the main keyboard buttons — used for reverse text→command lookup
     private static final Set<String> ALL_BTN_LIST     = BotMessages.getAllValues(BotMessages.Key.BTN_LIST);
     private static final Set<String> ALL_BTN_CHANGE_TZ = BotMessages.getAllValues(BotMessages.Key.BTN_CHANGE_TZ);
+    private static final Set<String> ALL_BTN_CANCEL   = BotMessages.getAllValues(BotMessages.Key.BTN_CANCEL);
 
     private record TimezoneOption(String label, String tz) {}
 
@@ -211,6 +212,14 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
         if (ALL_BTN_LIST.contains(text)) text = "/list";
         else if (ALL_BTN_CHANGE_TZ.contains(text)) text = "/timezone";
 
+        // Cancel button — dismiss timezone keyboard, show main keyboard
+        if (!isGroup && ALL_BTN_CANCEL.contains(text)) {
+            var profileLangC = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+            var cancelLang = profileLangC != null ? profileLangC : languageCode;
+            sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.BTN_LIST, cancelLang), buildMainKeyboard(cancelLang));
+            return;
+        }
+
         // Region button from timezone keyboard
         if (!isGroup && REGION_BTN_SET.contains(text)) {
             handleRegionButtonTap(chatId, text, languageCode);
@@ -286,13 +295,22 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
         row3.add(KeyboardButton.builder().text("🌏 Pacific / AU").build());
         row3.add(KeyboardButton.builder().text("🌐 UTC / Other").build());
 
+        var row4 = new KeyboardRow();
+        row4.add(KeyboardButton.builder().text(BotMessages.get(BotMessages.Key.BTN_CANCEL, languageCode)).build());
+
         var keyboard = ReplyKeyboardMarkup.builder()
-            .keyboard(List.of(row1, row2, row3))
+            .keyboard(List.of(row1, row2, row3, row4))
             .resizeKeyboard(true)
             .oneTimeKeyboard(false)
             .build();
 
-        sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.ASK_TIMEZONE, languageCode), keyboard);
+        var currentTz = reminderService.getUserTimezone(chatId, MessengerType.TELEGRAM);
+        var baseMsg = BotMessages.get(BotMessages.Key.ASK_TIMEZONE, languageCode);
+        var msg = (currentTz != null && !currentTz.equals("UTC"))
+            ? "🕐 " + currentTz + "\n\n" + baseMsg
+            : baseMsg;
+
+        sendWithMarkup(chatId, msg, keyboard);
     }
 
     private void handleLocationMessage(String chatId, Location location, String languageCode) {
@@ -329,11 +347,14 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     }
 
     private void handleRegionButtonTap(String chatId, String regionLabel, String languageCode) {
-        // Dismiss the location/region reply keyboard and show inline timezone list
+        // First message removes the reply keyboard
         sendWithMarkup(chatId,
             BotMessages.get(BotMessages.Key.TZ_CHOOSE_REGION, languageCode),
             ReplyKeyboardRemove.builder().removeKeyboard(true).build());
-        sendWithMarkup(chatId, regionLabel, buildTimezonePicker(regionLabel));
+        // Second message shows the inline timezone picker for the selected region
+        sendWithMarkup(chatId,
+            BotMessages.get(BotMessages.Key.TZ_CHOOSE_REGION, languageCode),
+            buildTimezonePicker(regionLabel));
     }
 
     // ── Callback query handling ───────────────────────────────────────────────
@@ -372,7 +393,8 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             return;
         }
 
-        if ("tz:regions".equals(data)) {            editInlineKeyboard(chatId, messageId,
+        if ("tz:regions".equals(data)) {
+            editInlineKeyboard(chatId, messageId,
                 BotMessages.get(BotMessages.Key.TZ_CHOOSE_REGION, languageCode),
                 buildRegionPicker());
 
@@ -391,11 +413,19 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             try {
                 ZoneId.of(tz); // validate
                 reminderService.confirmTimezone(chatId, MessengerType.TELEGRAM, tz, languageCode);
+                var profileLang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+                var displayLang = profileLang != null ? profileLang : languageCode;
                 removeInlineKeyboard(chatId, messageId);
-                sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_CONFIRMED, languageCode, tz), buildMainKeyboard(languageCode));
+                sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_CONFIRMED, displayLang, tz), buildMainKeyboard(displayLang));
             } catch (Exception e) {
                 log.warn("Failed to confirm timezone {} for chat {}: {}", tz, chatId, e.getMessage());
             }
+
+        } else if ("tz:cancel".equals(data)) {
+            var profileLang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+            var displayLang = profileLang != null ? profileLang : languageCode;
+            removeInlineKeyboard(chatId, messageId);
+            sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.BTN_LIST, displayLang), buildMainKeyboard(displayLang));
         }
     }
 
@@ -443,6 +473,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             }
         }
         if (!row.isEmpty()) rows.add(new InlineKeyboardRow(row));
+        rows.add(new InlineKeyboardRow(List.of(InlineKeyboardButton.builder().text("✖️ Cancel").callbackData("tz:cancel").build())));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 
@@ -461,8 +492,11 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             }
         }
         if (!row.isEmpty()) rows.add(new InlineKeyboardRow(row));
-        // Back button
-        rows.add(new InlineKeyboardRow(List.of(InlineKeyboardButton.builder().text("« Back").callbackData("tz:regions").build())));
+        // Back to regions + Cancel
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder().text("« Back").callbackData("tz:regions").build(),
+            InlineKeyboardButton.builder().text("✖️ Cancel").callbackData("tz:cancel").build()
+        )));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 
@@ -473,6 +507,8 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             var builder = SendMessage.builder().chatId(chatId).text(text);
             if (markup instanceof org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard kb) {
                 builder.replyMarkup(kb);
+            } else if (markup instanceof InlineKeyboardMarkup inlineKb) {
+                builder.replyMarkup(inlineKb);
             }
             telegramClient.execute(builder.build());
         } catch (TelegramApiException e) {

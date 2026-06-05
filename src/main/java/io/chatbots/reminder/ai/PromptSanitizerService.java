@@ -94,8 +94,6 @@ public class PromptSanitizerService {
     }
 
     public String buildSystemPrompt(String languageCode) {
-        var langName = resolveLanguageName(languageCode);
-
         return """
             CRITICAL INSTRUCTIONS - FOLLOW AT ALL TIMES:
             
@@ -244,20 +242,20 @@ public class PromptSanitizerService {
             
             If the special case date is recurring (e.g. birthday every year), ALL chain entries must also be recurring yearly crons computed relative to the event date.
             If the special case is one-time, ALL chain entries use fireAt.
-             
+            
             8. LANGUAGE DETECTION: Detect the ISO 639-1 language code of the user's message text (e.g. "en", "de", "pl", "ru", "uk") and return it in detectedLanguageCode. This is the language the user WROTE IN, independent of the response language.
-             
-            9. RESPONSE LANGUAGE: Generate ALL text fields (reminderText, scheduleDescription, errorMessage, and all chain.reminderText, chain.scheduleDescription) in %s. Never mix languages in a single field.
+            
+            9. RESPONSE LANGUAGE: specified per-request in the user message as [Language: <name>]. Generate ALL text fields (reminderText, scheduleDescription, errorMessage, and all chain.reminderText, chain.scheduleDescription) in that language. Never mix languages in a single field.
                IMPORTANT: reminderText must be written in **imperative form** (a command/action addressed to the user), NOT as an infinitive or noun phrase.
                Examples: "Get up" (not "Getting up"), "Встаньте" (not "Встати"), "Nimm die Pille" (not "Pille nehmen"), "Achète des fleurs" (not "Acheter des fleurs").
                The reminder text is sent as a push notification, so it must read as a direct call to action.
                Exception: maintenance reminders may still use "Time to [do it again]: [thing]" format as specified in rule 7.
-             
+            
             RETURN ONLY THE JSON OBJECT. No markdown, no explanation, just the raw JSON.
-            """.formatted(langName);
+            """;
     }
 
-    private static String resolveLanguageName(String langCode) {
+    public String resolveLanguageName(String langCode) {
         var normalized = langCode == null || langCode.isBlank()
             ? "en"
             : (langCode.length() >= 2 ? langCode.substring(0, 2) : langCode).toLowerCase();

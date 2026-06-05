@@ -257,6 +257,7 @@ public class ReminderService {
             return BotMessages.get(BotMessages.Key.NOT_FOUND, languageCode);
         }
         reminder.setActive(false);
+        reminder.setDeletedAt(LocalDateTime.now());
         reminderRepository.save(reminder);
         eventPublisher.publishEvent(new ReminderDeletedEvent(reminder));
         return BotMessages.get(BotMessages.Key.DELETED, languageCode, reminderId);
@@ -337,6 +338,12 @@ public class ReminderService {
             .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public String getUserTimezone(String chatId, MessengerType messengerType) {
+        return chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType)
+            .map(ChatUser::getTimezone)
+            .orElse(null);
+    }
     @Transactional(readOnly = true)
     public List<Long> getActiveReminderIds(String chatId, MessengerType messengerType) {
         return chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType)
