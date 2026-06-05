@@ -24,8 +24,6 @@ jobs:
 
       - name: Test with coverage
         run: ./mvnw verify
-        env:
-          TESTCONTAINERS_RYUK_DISABLED: true
 
       - name: Extract coverage
         id: coverage
