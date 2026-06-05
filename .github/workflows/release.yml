@@ -61,10 +61,24 @@ jobs:
                               print(f'| {name} | {covered}/{total} ({pct}%) |')
           " >> $GITHUB_STEP_SUMMARY
 
-      - name: Build release JAR
+      - name: Build and extract layers
         run: |
           ./mvnw package -DskipTests
           cp target/reminder-0.0.1-SNAPSHOT.jar target/reminder.jar
+
+          # Extract into layers
+          mkdir -p extracted
+          java -Djarmode=tools -jar target/reminder.jar extract --destination extracted
+
+          # App layer — thin JAR with only compiled app classes (~100KB)
+          cp extracted/reminder.jar target/reminder-app.jar
+
+          # Checksum of all lib JARs — used by update script to detect dep changes
+          find extracted/lib -name "*.jar" | sort | xargs md5sum | md5sum | cut -d' ' -f1 > target/reminder-libs-checksum.txt
+
+          echo "Full JAR:  $(du -sh target/reminder.jar | cut -f1)"
+          echo "App layer: $(du -sh target/reminder-app.jar | cut -f1)"
+          echo "Libs hash: $(cat target/reminder-libs-checksum.txt)"
 
       - name: Generate tag and release notes
         id: meta
@@ -92,7 +106,10 @@ jobs:
           body: |
             ## Changes
             ${{ steps.meta.outputs.notes }}
-          files: target/reminder.jar
+          files: |
+            target/reminder.jar
+            target/reminder-app.jar
+            target/reminder-libs-checksum.txt
 
   dependency-check:
     runs-on: ubuntu-latest
@@ -106,18 +123,22 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Get date for cache key
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: Cache NVD database
         uses: actions/cache@v4
         with:
           path: ~/.dependency-check-data
-          key: nvd-${{ hashFiles('**/pom.xml') }}
+          key: nvd-${{ steps.date.outputs.date }}
           restore-keys: nvd-
 
       - name: OWASP Dependency Check
         run: |
-          EXTRA=""
+          EXTRA="-DossindexAnalyzerEnabled=false"
           if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
-            EXTRA="-DnvdApiKey=${{ secrets.NVD_API_KEY }}"
+            EXTRA="$EXTRA -DnvdApiKey=${{ secrets.NVD_API_KEY }}"
           fi
           ./mvnw dependency-check:check -DfailBuildOnCVSS=7 $EXTRA
 

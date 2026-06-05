@@ -53,6 +53,17 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
 <scope>runtime</scope>
 </dependency>
 <dependency>
+<groupId>io.projectreactor.netty</groupId>
+<artifactId>reactor-netty-http</artifactId>
+<exclusions>
+    <exclusion><groupId>io.netty</groupId><artifactId>netty-codec-native-quic</artifactId></exclusion>
+    <exclusion><groupId>io.netty</groupId><artifactId>netty-codec-classes-quic</artifactId></exclusion>
+    <exclusion><groupId>io.netty</groupId><artifactId>netty-codec-http3</artifactId></exclusion>
+    <exclusion><groupId>io.netty</groupId><artifactId>netty-resolver-dns-native-macos</artifactId></exclusion>
+    <exclusion><groupId>io.netty</groupId><artifactId>netty-resolver-dns-classes-macos</artifactId></exclusion>
+</exclusions>
+</dependency>
+<dependency>
 <groupId>org.telegram</groupId>
 <artifactId>telegrambots-longpolling</artifactId>
 <version>9.3.0</version>
