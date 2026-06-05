@@ -260,7 +260,7 @@ public class ReminderService {
         reminder.setDeletedAt(LocalDateTime.now());
         reminderRepository.save(reminder);
         eventPublisher.publishEvent(new ReminderDeletedEvent(reminder));
-        return BotMessages.get(BotMessages.Key.DELETED, languageCode, reminderId);
+        return BotMessages.get(BotMessages.Key.DELETED, languageCode, reminder.getReminderText());
     }
 
     public String updateTimezone(String chatId, MessengerType messengerType, String timezone) {
