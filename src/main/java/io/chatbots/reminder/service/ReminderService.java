@@ -324,6 +324,7 @@ public class ReminderService {
         if (r.isRecurring() && r.getCronExpression() != null) {
             try {
                 var ce = new CronExpression(r.getCronExpression());
+                ce.setTimeZone(java.util.TimeZone.getTimeZone(zoneId));
                 var next = ce.getNextValidTimeAfter(Date.from(nowInstant));
                 if (next != null) {
                     return (next.getTime() - System.currentTimeMillis()) / 1000;
