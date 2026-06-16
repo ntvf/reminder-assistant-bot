@@ -41,7 +41,6 @@ public class TelegramConfig {
     }
 
     private static Proxy resolveProxy() {
-        // Prefer HTTPS_PROXY, fall back to HTTP_PROXY (check both cases)
         var raw = firstNonBlank(
             System.getenv("HTTPS_PROXY"),
             System.getenv("https_proxy"),

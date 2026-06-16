@@ -26,6 +26,9 @@ public class Reminder {
     @Column(name = "reminder_text", nullable = false)
     private String reminderText;
 
+    @Column(name = "event_text")
+    private String eventText;
+
     @Column(name = "schedule_description")
     private String scheduleDescription;
 
@@ -71,6 +74,18 @@ public class Reminder {
 
     public void setReminderText(String reminderText) {
         this.reminderText = reminderText;
+    }
+
+    public String getDisplayText() {
+        return eventText != null && !eventText.isBlank() ? eventText : reminderText;
+    }
+
+    public String getEventText() {
+        return eventText;
+    }
+
+    public void setEventText(String eventText) {
+        this.eventText = eventText;
     }
 
     public String getScheduleDescription() {

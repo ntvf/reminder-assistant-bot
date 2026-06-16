@@ -70,12 +70,6 @@ public class ReminderService {
         return persistAndRespond(v, message.chatId());
     }
 
-    /**
-     * Direct-message entry point. Parses like {@link #createReminder}, but for a one-time real-world event
-     * that has its own start time, carries no explicit reminder offset, and produced no auto lead-up chain
-     * (option B), it returns a draft so the bot can offer "remind before?" buttons instead of silently
-     * scheduling at the event time. Everything else is persisted immediately, exactly as before.
-     */
     public ReminderOutcome createOrOfferLeadTime(MessengerMessage message, String languageCode) {
         var v = validate(message, languageCode);
         if (v.errorText() != null) return ReminderOutcome.text(v.errorText());
@@ -83,18 +77,14 @@ public class ReminderService {
         boolean offerLead = p.preEventChoice() && !p.recurring() && p.fireAt() != null
             && (v.chain() == null || v.chain().isEmpty());
         if (offerLead) {
-            return ReminderOutcome.lead(new LeadChoiceDraft(p.reminderText(), p.fireAt(), v.userLang()));
+            return ReminderOutcome.lead(new LeadChoiceDraft(p.reminderText(), p.eventText(), p.fireAt(), v.userLang()));
         }
         return ReminderOutcome.text(persistAndRespond(v, message.chatId()));
     }
 
-    /**
-     * Creates a single one-time reminder at {@code fireAt} — used when the user picks a lead time for an
-     * event. If {@code fireAt} lands in the past (e.g. "day before" of an event under a day away), it
-     * falls back to {@code fallbackFireAt} (the event time itself).
-     */
     public String createTimedReminder(String chatId, MessengerType messengerType, String reminderText,
-                                      LocalDateTime fireAt, LocalDateTime fallbackFireAt, String languageCode) {
+                                      String eventText, LocalDateTime fireAt, LocalDateTime fallbackFireAt,
+                                      String languageCode) {
         var chatUserOpt = chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType);
         if (chatUserOpt.isEmpty()) return BotMessages.get(BotMessages.Key.WRONG, languageCode);
         var chatUser = chatUserOpt.get();
@@ -110,15 +100,18 @@ public class ReminderService {
             return BotMessages.get(BotMessages.Key.FIREAT_INVALID, userLang);
         }
         var scheduleDesc = cronDescriptionService.resolve(null, null, chosen, false, userLang);
-        var saved = saveReminder(chatUser, reminderText, scheduleDesc, false, null, chosen);
+        var saved = saveReminder(chatUser, reminderText, eventText, scheduleDesc, false, null, chosen);
         log.info("Created lead-time reminder {} for chat {}", saved.getId(), chatId);
+        var label = displayLabel(reminderText, eventText);
+        var relWord = chosen.toLocalDate().isEqual(fallbackFireAt.toLocalDate())
+            ? null : cronDescriptionService.relativeDayWord(chosen, fallbackFireAt, userLang);
+        var displayText = relWord != null ? label + " (" + relWord + ")" : label;
         return new StringBuilder(BotMessages.get(BotMessages.Key.REMINDER_SET, userLang))
-            .append("\n📝 <b>").append(BotMessages.htmlEscape(reminderText))
+            .append("\n📝 <b>").append(BotMessages.htmlEscape(displayText))
             .append("</b>\n🕐 <i>").append(BotMessages.htmlEscape(scheduleDesc)).append("</i>")
             .toString();
     }
 
-    /** Shared parse + validation for both reminder entry points. Returns either an error reply or a validated bundle. */
     private Validated validate(MessengerMessage message, String languageCode) {
         var cleanText = promptSanitizerService.sanitize(message.text(), message.forwarded());
         log.info("Reminder request from chat {}: {}", message.chatId(), message.text());
@@ -139,7 +132,6 @@ public class ReminderService {
             return Validated.error(BotMessages.get(BotMessages.Key.WRONG, userLanguageCode));
         }
 
-        // Update stored language from AI detection
         if (parseResult.detectedLanguageCode() != null) {
             var detected = parseResult.detectedLanguageCode().toLowerCase();
             if (detected.length() > 2) detected = detected.substring(0, 2);
@@ -182,7 +174,6 @@ public class ReminderService {
         return Validated.ok(chatUser, userLanguageCode, parseResult, scheduleDesc, chain);
     }
 
-    /** Persists the validated main reminder (and any lead-up chain) and builds the confirmation reply. */
     private String persistAndRespond(Validated v, String chatId) {
         var chatUser = v.chatUser();
         var userLanguageCode = v.userLang();
@@ -190,12 +181,12 @@ public class ReminderService {
         var scheduleDesc = v.scheduleDesc();
         var chain = v.chain();
 
-        var saved = saveReminder(chatUser, parseResult.reminderText(), scheduleDesc,
+        var saved = saveReminder(chatUser, parseResult.reminderText(), parseResult.eventText(), scheduleDesc,
             parseResult.recurring(), parseResult.cronExpression(), parseResult.fireAt());
 
         var response = new StringBuilder(BotMessages.get(BotMessages.Key.REMINDER_SET, userLanguageCode))
             .append("\n📝 <b>")
-            .append(BotMessages.htmlEscape(parseResult.reminderText()))
+            .append(BotMessages.htmlEscape(displayLabel(parseResult.reminderText(), parseResult.eventText())))
             .append("</b>\n🕐 <i>")
             .append(BotMessages.htmlEscape(scheduleDesc))
             .append("</i>");
@@ -207,15 +198,20 @@ public class ReminderService {
                     log.warn("Skipping chain entry with invalid cron: {}", entry.cronExpression());
                     continue;
                 }
+                if (entry.fireAt() != null && parseResult.fireAt() != null
+                        && !entry.fireAt().isBefore(parseResult.fireAt())) {
+                    log.warn("Skipping chain entry at/after main reminder time: {}", entry.fireAt());
+                    continue;
+                }
                 var entryDesc = cronDescriptionService.resolve(
                     entry.scheduleDescription(), entry.cronExpression(),
                     entry.fireAt(), entry.cronExpression() != null, userLanguageCode);
-                var chained = saveReminder(chatUser, entry.reminderText(), entryDesc,
+                var chained = saveReminder(chatUser, entry.reminderText(), entry.eventText(), entryDesc,
                     entry.cronExpression() != null, entry.cronExpression(), entry.fireAt());
                 response.append("\n  • <i>")
                     .append(BotMessages.htmlEscape(entryDesc))
                     .append("</i> — ")
-                    .append(BotMessages.htmlEscape(entry.reminderText()));
+                    .append(BotMessages.htmlEscape(displayLabel(entry.reminderText(), entry.eventText())));
                 log.info("Created chain reminder {} for chat {}", chained.getId(), chatId);
             }
         }
@@ -224,14 +220,12 @@ public class ReminderService {
         return response.toString();
     }
 
-    /** Result of {@link #createOrOfferLeadTime}: either a final reply, or a draft needing a lead-time choice. */
     public record ReminderOutcome(String replyText, LeadChoiceDraft leadChoice) {
         public static ReminderOutcome text(String replyText) { return new ReminderOutcome(replyText, null); }
         public static ReminderOutcome lead(LeadChoiceDraft draft) { return new ReminderOutcome(null, draft); }
     }
 
-    /** Parsed event awaiting a lead-time choice; offsets are applied locally so no second LLM call is needed. */
-    public record LeadChoiceDraft(String reminderText, LocalDateTime eventFireAt, String languageCode) {}
+    public record LeadChoiceDraft(String reminderText, String eventText, LocalDateTime eventFireAt, String languageCode) {}
 
     private record Validated(String errorText, ChatUser chatUser, String userLang,
                              ReminderParseResult parse, String scheduleDesc, List<ChainedReminder> chain) {
@@ -242,7 +236,6 @@ public class ReminderService {
         }
     }
 
-    /** Returns true if cron would fire more often than once per 30 minutes. */
     private boolean isCronTooFrequent(String expr) {
         try {
             var cron = new CronExpression(expr);
@@ -256,7 +249,6 @@ public class ReminderService {
         }
     }
 
-    /** Returns true if fireAt is in the past (>30s ago) or absurdly far future (>50 years). */
     private boolean isFireAtInvalid(LocalDateTime fireAt, String timezone) {
         ZoneId zone;
         try { zone = ZoneId.of(timezone); } catch (Exception e) { zone = ZoneId.of("UTC"); }
@@ -264,11 +256,16 @@ public class ReminderService {
         return fireAt.isBefore(now.minusSeconds(30)) || fireAt.isAfter(now.plusYears(50));
     }
 
-    private Reminder saveReminder(ChatUser chatUser, String text, String scheduleDescription,
+    private static String displayLabel(String reminderText, String eventText) {
+        return eventText != null && !eventText.isBlank() ? eventText : reminderText;
+    }
+
+    private Reminder saveReminder(ChatUser chatUser, String text, String eventText, String scheduleDescription,
                                   boolean recurring, String cronExpression, java.time.LocalDateTime fireAt) {
         var reminder = new Reminder();
         reminder.setChatUser(chatUser);
         reminder.setReminderText(text);
+        reminder.setEventText(eventText);
         reminder.setScheduleDescription(scheduleDescription);
         reminder.setRecurring(recurring);
         reminder.setCronExpression(cronExpression);
@@ -284,7 +281,6 @@ public class ReminderService {
         return listReminders(chatId, messengerType, false);
     }
 
-    /** When {@code numbered}, each line is prefixed with its index so the Manage number-grid maps back to a reminder. */
     @Transactional(readOnly = true)
     public String listReminders(String chatId, MessengerType messengerType, boolean numbered) {
         var chatUserOpt = chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType);
@@ -307,7 +303,7 @@ public class ReminderService {
             if (numbered) {
                 sb.append("<b>").append(index++).append(".</b> ");
             }
-            sb.append("🔔 <b>").append(BotMessages.htmlEscape(reminder.getReminderText())).append("</b>");
+            sb.append("🔔 <b>").append(BotMessages.htmlEscape(reminder.getDisplayText())).append("</b>");
             sb.append(" — <i>").append(BotMessages.htmlEscape(reminder.getScheduleDescription())).append("</i>");
             long secs = secondsUntilNextFire(reminder, chatUser.getTimezone());
             if (secs > 0) {
@@ -359,7 +355,7 @@ public class ReminderService {
         reminder.setDeletedAt(LocalDateTime.now());
         reminderRepository.save(reminder);
         eventPublisher.publishEvent(new ReminderDeletedEvent(reminder));
-        return BotMessages.get(BotMessages.Key.DELETED, languageCode, BotMessages.htmlEscape(reminder.getReminderText()));
+        return BotMessages.get(BotMessages.Key.DELETED, languageCode, BotMessages.htmlEscape(reminder.getDisplayText()));
     }
 
     public String updateTimezone(String chatId, MessengerType messengerType, String timezone) {
@@ -394,7 +390,7 @@ public class ReminderService {
     }
 
     public void confirmTimezone(String chatId, MessengerType messengerType, String timezone, String languageCode) {
-        ZoneId.of(timezone); // validate — throws DateTimeException if invalid
+        ZoneId.of(timezone);
         var user = getOrCreateChatUser(chatId, messengerType, languageCode);
         user.setTimezone(timezone);
         user.setTimezoneConfirmed(true);
@@ -405,7 +401,6 @@ public class ReminderService {
         return chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted(chatId, messengerType)
             .map(user -> {
                 if (user.isDeleted()) {
-                    // Resurrect: clear deleted_at, reset timezone onboarding, restore Telegram language
                     user.setDeletedAt(null);
                     user.setTimezoneConfirmed(false);
                     if (languageCode != null) {
@@ -426,7 +421,7 @@ public class ReminderService {
             var now = LocalDateTime.now();
             var reminders = reminderRepository.findByChatUser(chatUser);
             reminders.forEach(r -> {
-                eventPublisher.publishEvent(new ReminderDeletedEvent(r)); // cancel Quartz job
+                eventPublisher.publishEvent(new ReminderDeletedEvent(r));
                 r.setActive(false);
                 r.setDeletedAt(now);
             });

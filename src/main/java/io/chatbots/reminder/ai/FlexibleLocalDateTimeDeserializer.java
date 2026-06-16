@@ -8,11 +8,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 
-/**
- * Deserializes a datetime string into LocalDateTime, tolerating an optional
- * UTC offset (e.g. "+02:00") that the AI may append to the ISO-8601 value.
- * The offset is stripped — the local time component is preserved as-is.
- */
 public class FlexibleLocalDateTimeDeserializer extends StdDeserializer<LocalDateTime> {
 
     public FlexibleLocalDateTimeDeserializer() {

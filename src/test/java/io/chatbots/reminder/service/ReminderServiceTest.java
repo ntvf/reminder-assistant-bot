@@ -53,7 +53,6 @@ class ReminderServiceTest {
         appProperties = new AppProperties(10, 50);
         reminderService = new ReminderService(reminderRepository, chatUserRepository,
             reminderAiService, promptSanitizerService, cronDescriptionService, appProperties, eventPublisher, rateLimitService);
-        // sanitize() now cleans+returns the text; by default echo it back so the parse path runs.
         lenient().when(promptSanitizerService.sanitize(anyString(), anyBoolean())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -63,7 +62,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("Feed the leaven", true, "0 0 18 ? * FRI", null,
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null,
             "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         var savedReminder = new Reminder();
@@ -84,7 +83,7 @@ class ReminderServiceTest {
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
         var event = LocalDateTime.now().plusDays(2).withHour(15).withMinute(0);
-        var parseResult = new ReminderParseResult("Group run", false, null, event,
+        var parseResult = new ReminderParseResult("Group run", "Group run", false, null, event,
             "in 2 days at 15:00", true, null, null, null, true);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -104,7 +103,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("Feed the leaven", true, "0 0 18 ? * FRI", null,
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null,
             "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         var saved = new Reminder();
@@ -149,7 +148,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult(null, false, null, null, null, false, "Not a reminder request", null, null, false);
+        var parseResult = new ReminderParseResult(null, null, false, null, null, null, false, "Not a reminder request", null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("123", MessengerType.TELEGRAM, "what is the capital of France?", "user", 1L);
@@ -165,7 +164,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("something", true, "invalid-cron", null, "desc", true, null, null, null, false);
+        var parseResult = new ReminderParseResult("something", null, true, "invalid-cron", null, "desc", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("123", MessengerType.TELEGRAM, "remind me", "user", 1L);

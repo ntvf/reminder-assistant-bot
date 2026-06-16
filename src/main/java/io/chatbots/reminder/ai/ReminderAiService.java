@@ -11,12 +11,12 @@ import java.time.ZoneId;
 @Service
 public class ReminderAiService {
 
-    // JSON Schema for OpenAI Structured Outputs (strict: true is applied automatically by Spring AI)
     private static final String RESPONSE_SCHEMA = """
         {
           "type": "object",
           "properties": {
             "reminderText":        {"type": "string"},
+            "eventText":           {"type": "string"},
             "recurring":           {"type": "boolean"},
             "cronExpression":      {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "fireAt":              {"anyOf": [{"type": "string"}, {"type": "null"}]},
@@ -31,11 +31,12 @@ public class ReminderAiService {
                     "type": "object",
                     "properties": {
                       "reminderText":        {"type": "string"},
+                      "eventText":           {"type": "string"},
                       "cronExpression":      {"anyOf": [{"type": "string"}, {"type": "null"}]},
                       "fireAt":              {"anyOf": [{"type": "string"}, {"type": "null"}]},
                       "scheduleDescription": {"anyOf": [{"type": "string"}, {"type": "null"}]}
                     },
-                    "required": ["reminderText", "cronExpression", "fireAt", "scheduleDescription"],
+                    "required": ["reminderText", "eventText", "cronExpression", "fireAt", "scheduleDescription"],
                     "additionalProperties": false
                   }
                 },
@@ -45,7 +46,7 @@ public class ReminderAiService {
             "detectedLanguageCode": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "preEventChoice":       {"type": "boolean"}
           },
-          "required": ["reminderText", "recurring", "cronExpression", "fireAt",
+          "required": ["reminderText", "eventText", "recurring", "cronExpression", "fireAt",
                        "scheduleDescription", "valid", "errorMessage", "chain",
                        "detectedLanguageCode", "preEventChoice"],
           "additionalProperties": false
@@ -72,7 +73,6 @@ public class ReminderAiService {
         var systemPrompt = promptSanitizerService.buildSystemPrompt(languageCode);
 
         var langName = promptSanitizerService.resolveLanguageName(languageCode);
-        // Temporal context + language in user message — keeps system prompt fully static for prompt caching
         var temporalContext = "[Temporal context: " + now + " | Timezone: " + timezone + " | Language: " + langName + "]\n";
 
         return chatClient.prompt()

@@ -52,10 +52,6 @@ public final class TimezoneDetector {
 
     private TimezoneDetector() {}
 
-    /**
-     * Best-effort timezone guess from Telegram language_code (IETF BCP 47).
-     * Returns "UTC" when no mapping found.
-     */
     public static String detect(String languageCode) {
         if (languageCode == null || languageCode.isBlank()) return "UTC";
         var lang = languageCode.split("[-_]")[0].toLowerCase();

@@ -32,7 +32,6 @@ public class HttpClientConfig {
     private static HttpClient buildHttpClient() {
         var clientBuilder = HttpClient.newBuilder();
 
-        // Always disable SSL validation — corporate MITM proxy re-signs certificates
         try {
             clientBuilder.sslContext(trustAllSslContext());
         } catch (Exception e) {

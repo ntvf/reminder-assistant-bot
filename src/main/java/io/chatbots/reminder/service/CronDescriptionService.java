@@ -14,7 +14,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class CronDescriptionService {
@@ -24,10 +26,6 @@ public class CronDescriptionService {
     private static final CronParser QUARTZ_PARSER =
         new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.QUARTZ));
 
-    /**
-     * Returns a human-readable schedule description, using the AI-provided one if available,
-     * otherwise generating it from the cron expression or fireAt datetime.
-     */
     public String resolve(String aiDescription, String cronExpression, LocalDateTime fireAt,
                           boolean recurring, String languageCode) {
         if (aiDescription != null && !aiDescription.isBlank()) {
@@ -54,14 +52,36 @@ public class CronDescriptionService {
 
     private String describeFireAt(LocalDateTime fireAt, String languageCode) {
         try {
-            var locale = resolveLocale(languageCode);
-            return fireAt.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale));
+            var locale = resolveDateLocale(languageCode);
+            return fireAt.format(DateTimeFormatter
+                .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+                .withLocale(locale));
         } catch (Exception e) {
             return fireAt.toString();
         }
     }
 
-    /** Computes the next fire time for a cron expression relative to a given timezone. */
+    private static final Map<String, String[]> RELATIVE_DAYS = Map.ofEntries(
+        Map.entry("en", new String[]{"today", "tomorrow"}),
+        Map.entry("ru", new String[]{"сегодня", "завтра"}),
+        Map.entry("uk", new String[]{"сьогодні", "завтра"}),
+        Map.entry("de", new String[]{"heute", "morgen"}),
+        Map.entry("fr", new String[]{"aujourd'hui", "demain"}),
+        Map.entry("es", new String[]{"hoy", "mañana"}),
+        Map.entry("pt", new String[]{"hoje", "amanhã"}),
+        Map.entry("it", new String[]{"oggi", "domani"}),
+        Map.entry("tr", new String[]{"bugün", "yarın"}),
+        Map.entry("pl", new String[]{"dziś", "jutro"}));
+
+    public String relativeDayWord(LocalDateTime from, LocalDateTime event, String languageCode) {
+        if (from == null || event == null) return null;
+        long days = ChronoUnit.DAYS.between(from.toLocalDate(), event.toLocalDate());
+        if (days != 0 && days != 1) return null;
+        var lang = languageCode == null ? "en"
+            : (languageCode.length() >= 2 ? languageCode.substring(0, 2).toLowerCase() : languageCode);
+        return RELATIVE_DAYS.getOrDefault(lang, RELATIVE_DAYS.get("en"))[(int) days];
+    }
+
     public LocalDateTime nextFireTime(String cronExpression, String timezone) {
         try {
             ZoneId zone;
@@ -76,8 +96,6 @@ public class CronDescriptionService {
         }
     }
 
-    // cron-utils supports: EN, ES, PT, DE, FR, IT, ZH, KO, NL, AR, TR, PL
-    // RU and UK fall back to English
     private Locale resolveLocale(String languageCode) {
         if (languageCode == null) return Locale.ENGLISH;
         var lang = languageCode.length() >= 2 ? languageCode.substring(0, 2).toLowerCase() : languageCode;
@@ -95,5 +113,11 @@ public class CronDescriptionService {
             case "nl" -> Locale.of("nl");
             default   -> Locale.ENGLISH;
         };
+    }
+
+    private Locale resolveDateLocale(String languageCode) {
+        if (languageCode == null || languageCode.isBlank()) return Locale.ENGLISH;
+        var lang = languageCode.length() >= 2 ? languageCode.substring(0, 2).toLowerCase() : languageCode;
+        return Locale.of(lang);
     }
 }

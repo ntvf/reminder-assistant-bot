@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 public record ChainedReminder(
     @JsonProperty("reminderText") String reminderText,
+    @JsonProperty("eventText") String eventText,
     @JsonProperty("cronExpression") String cronExpression,
     @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)
     @JsonProperty("fireAt") LocalDateTime fireAt,

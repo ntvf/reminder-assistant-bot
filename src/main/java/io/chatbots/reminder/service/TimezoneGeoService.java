@@ -5,17 +5,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Finds the nearest known timezone from GPS coordinates using a curated table of city coordinates.
- * More reliable than longitude→UTC-offset math which ignores DST and picks wrong continents.
- */
 @Service
 public class TimezoneGeoService {
 
     private record ZoneEntry(String zoneId, double lat, double lon) {}
 
     private static final List<ZoneEntry> ZONE_TABLE = List.of(
-        // Americas
         new ZoneEntry("America/New_York",             40.7,  -74.0),
         new ZoneEntry("America/Chicago",              41.8,  -87.6),
         new ZoneEntry("America/Denver",               39.7, -104.9),
@@ -32,7 +27,6 @@ public class TimezoneGeoService {
         new ZoneEntry("America/Halifax",              44.6,  -63.6),
         new ZoneEntry("America/Anchorage",            61.2, -149.9),
         new ZoneEntry("Pacific/Honolulu",             21.3, -157.8),
-        // Europe
         new ZoneEntry("Europe/London",                51.5,   -0.1),
         new ZoneEntry("Europe/Lisbon",                38.7,   -9.1),
         new ZoneEntry("Europe/Dublin",                53.3,   -6.3),
@@ -54,7 +48,6 @@ public class TimezoneGeoService {
         new ZoneEntry("Europe/Athens",                37.9,   23.7),
         new ZoneEntry("Europe/Istanbul",              41.0,   29.0),
         new ZoneEntry("Europe/Moscow",                55.7,   37.6),
-        // Africa
         new ZoneEntry("Africa/Casablanca",            33.6,   -7.6),
         new ZoneEntry("Africa/Algiers",               36.7,    3.0),
         new ZoneEntry("Africa/Lagos",                  6.5,    3.4),
@@ -62,7 +55,6 @@ public class TimezoneGeoService {
         new ZoneEntry("Africa/Cairo",                 30.0,   31.2),
         new ZoneEntry("Africa/Nairobi",               -1.3,   36.8),
         new ZoneEntry("Africa/Johannesburg",         -26.2,   28.0),
-        // Middle East & Central Asia
         new ZoneEntry("Asia/Baghdad",                 33.3,   44.4),
         new ZoneEntry("Asia/Riyadh",                  24.7,   46.7),
         new ZoneEntry("Asia/Dubai",                   25.2,   55.3),
@@ -75,7 +67,6 @@ public class TimezoneGeoService {
         new ZoneEntry("Asia/Kolkata",                 20.6,   78.9),
         new ZoneEntry("Asia/Dhaka",                   23.7,   90.4),
         new ZoneEntry("Asia/Yekaterinburg",           56.8,   60.6),
-        // Asia-Pacific
         new ZoneEntry("Asia/Bangkok",                 13.8,  100.5),
         new ZoneEntry("Asia/Jakarta",                 -6.2,  106.8),
         new ZoneEntry("Asia/Singapore",                1.3,  103.8),
@@ -88,7 +79,6 @@ public class TimezoneGeoService {
         new ZoneEntry("Asia/Krasnoyarsk",             56.0,   92.9),
         new ZoneEntry("Asia/Irkutsk",                 52.3,  104.3),
         new ZoneEntry("Asia/Vladivostok",             43.1,  131.9),
-        // Australia & Pacific
         new ZoneEntry("Australia/Perth",             -31.9,  115.9),
         new ZoneEntry("Australia/Adelaide",          -34.9,  138.6),
         new ZoneEntry("Australia/Brisbane",          -27.5,  153.0),

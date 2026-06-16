@@ -19,10 +19,6 @@ import java.net.Proxy;
 import java.net.URI;
 import java.security.cert.X509Certificate;
 
-/**
- * Overrides Spring AI's OpenAI autoconfiguration to inject proxy + trust-all SSL.
- * Required for corporate MITM proxies that re-sign TLS certificates.
- */
 @Configuration
 public class OpenAiClientConfig {
 

@@ -8,6 +8,7 @@ import java.util.List;
 
 public record ReminderParseResult(
     @JsonProperty("reminderText") String reminderText,
+    @JsonProperty("eventText") String eventText,
     @JsonProperty("recurring") boolean recurring,
     @JsonProperty("cronExpression") String cronExpression,
     @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)

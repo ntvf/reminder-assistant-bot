@@ -14,7 +14,6 @@ public class PromptSanitizerService {
     private static final Logger log = LoggerFactory.getLogger(PromptSanitizerService.class);
 
     private static final List<Pattern> BLOCKED_PATTERNS = List.of(
-        // English
         Pattern.compile("(?i)ignore\\s+(all\\s+)?previous\\s+instructions"),
         Pattern.compile("(?i)ignore\\s+(all\\s+)?above\\s+instructions"),
         Pattern.compile("(?i)disregard\\s+(all\\s+)?previous"),
@@ -28,81 +27,63 @@ public class PromptSanitizerService {
         Pattern.compile("(?i)act\\s+as\\s+(?:an?\\s+)?(?:different|other|new|unrestricted)"),
         Pattern.compile("(?i)do\\s+anything\\s+now"),
         Pattern.compile("(?i)jailbreak"),
-        // Russian (Cyrillic)
         Pattern.compile("(?i)игнорируй.{0,20}инструкц"),
         Pattern.compile("(?i)забудь.{0,20}инструкц"),
         Pattern.compile("(?i)притворись.{0,20}(что|будто)"),
         Pattern.compile("(?i)ты\\s+теперь\\s+(?!напомнил)"),
         Pattern.compile("(?i)новые\\s+инструкции"),
         Pattern.compile("(?i)системный\\s+промпт"),
-        // German
         Pattern.compile("(?i)ignoriere.{0,20}(alle|vorherigen).{0,20}anweisung"),
         Pattern.compile("(?i)vergiss.{0,20}(alle|vorherigen).{0,20}anweisung"),
         Pattern.compile("(?i)tu\\s+so\\s+als"),
         Pattern.compile("(?i)du\\s+bist\\s+jetzt\\s+(?!eine?\\s+erinnerung)"),
         Pattern.compile("(?i)neue\\s+anweisungen"),
-        // French
         Pattern.compile("(?i)ignore[sz]?.{0,20}(toutes.{0,10})?instructions.{0,20}précédentes"),
         Pattern.compile("(?i)oublie[sz]?.{0,20}instructions"),
         Pattern.compile("(?i)fais\\s+semblant"),
         Pattern.compile("(?i)tu\\s+es\\s+maintenant\\s+(?!un.{0,10}rappel)"),
         Pattern.compile("(?i)nouvelles\\s+instructions"),
-        // Spanish
         Pattern.compile("(?i)ignora.{0,20}(todas.{0,10})?instrucciones.{0,20}anteriores"),
         Pattern.compile("(?i)olvida.{0,20}instrucciones"),
         Pattern.compile("(?i)finge\\s+(que\\s+)?ser"),
         Pattern.compile("(?i)ahora\\s+eres\\s+(?!un.{0,10}recordatorio)"),
         Pattern.compile("(?i)nuevas\\s+instrucciones"),
-        // Portuguese
         Pattern.compile("(?i)ignore.{0,20}(todas.{0,10})?instruções.{0,20}anteriores"),
         Pattern.compile("(?i)esqueça.{0,20}instruções"),
         Pattern.compile("(?i)finja\\s+(que\\s+)?ser"),
         Pattern.compile("(?i)você\\s+agora\\s+é"),
-        // Italian
         Pattern.compile("(?i)ignora.{0,20}(tutte.{0,10})?istruzioni.{0,20}precedenti"),
         Pattern.compile("(?i)dimentica.{0,20}istruzioni"),
         Pattern.compile("(?i)fingi\\s+(di\\s+)?essere"),
         Pattern.compile("(?i)sei\\s+ora\\s+(?!un.{0,10}promemoria)"),
-        // Turkish
         Pattern.compile("(?i)önceki.{0,20}talimatları?\\s+yoksay"),
         Pattern.compile("(?i)talimatları?\\s+unut"),
         Pattern.compile("(?i)şimdi\\s+sen\\s+bir"),
-        // Polish
         Pattern.compile("(?i)zignoruj.{0,20}(wszystkie.{0,10})?poprzednie.{0,20}instrukcje"),
         Pattern.compile("(?i)zapomnij.{0,20}instrukcje"),
         Pattern.compile("(?i)udawaj.{0,20}że\\s+jesteś"),
-        // Ukrainian (Cyrillic)
         Pattern.compile("(?i)ігноруй.{0,20}інструкц"),
         Pattern.compile("(?i)забудь.{0,20}інструкц"),
         Pattern.compile("(?i)прикидайся")
     );
 
-    /** Directly-typed reminder requests should be short; longer input is truncated to keep parses focused. */
     private static final int MAX_LENGTH_DIRECT = 300;
 
-    /** Forwards (emails, invites) are legitimately longer; truncate at a higher bound rather than reject. */
     private static final int MAX_LENGTH_FORWARD = 1000;
 
     private static final Pattern URL = Pattern.compile("https?://\\S+");
 
-    /** Sanitizes a directly-typed message (capped at {@value #MAX_LENGTH_DIRECT} chars). */
     public String sanitize(String userMessage) {
         return sanitize(userMessage, false);
     }
 
-    /**
-     * Cleans a message before it reaches the LLM: strips URLs and collapses runaway whitespace to cut
-     * token spam, then caps length. Forwarded messages get a higher cap than directly-typed ones, which
-     * are normally short. Length is truncated, not rejected, so a reminder's intent still gets parsed.
-     * Empty input and prompt-injection attempts still throw.
-     */
     public String sanitize(String userMessage, boolean forwarded) {
         if (userMessage == null || userMessage.isBlank()) {
             throw new OffTopicRequestException("Empty message");
         }
-        var text = URL.matcher(userMessage).replaceAll(" ")   // drop links — pure token spam to the LLM
-            .replaceAll("[ \\t\\x0B\\f\\r]+", " ")            // collapse horizontal whitespace
-            .replaceAll("\\n{3,}", "\n\n")                    // collapse blank-line runs
+        var text = URL.matcher(userMessage).replaceAll(" ")
+            .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+            .replaceAll("\\n{3,}", "\n\n")
             .trim();
         var max = forwarded ? MAX_LENGTH_FORWARD : MAX_LENGTH_DIRECT;
         if (text.length() > max) {
@@ -131,7 +112,7 @@ public class PromptSanitizerService {
     public String buildSystemPrompt(String languageCode) {
         return """
             CRITICAL INSTRUCTIONS - FOLLOW AT ALL TIMES:
-            
+
             1. You are EXCLUSIVELY a reminder scheduling assistant.
             2. Your ONLY function is to parse natural language reminder requests and return structured JSON.
             3. Current date/time is provided in the user message as [Temporal context: <ISO-8601 datetime> | Timezone: <IANA zone>].
@@ -177,10 +158,11 @@ public class PromptSanitizerService {
                  | "hair cut / trimmed"              | +1 month              |
                  For unknown maintenance items, default to +1 year.
                  reminderText should say "Time to [do it again]: [thing]"
-            
+
             Parse the reminder request and return ONLY valid JSON with this exact structure:
             {
-              "reminderText": "the reminder message text to send to user",
+              "reminderText": "the imperative call-to-action delivered AT the scheduled moment (see rule 9)",
+              "eventText": "the SAME thing as a short neutral noun phrase naming the event, for display in a list (see rule 11)",
               "recurring": true or false,
               "cronExpression": "Quartz cron (6 fields: sec min hour dom month dow) or null if one-time",
               "fireAt": "ISO-8601 datetime e.g. 2024-01-15T09:00:00 or null if recurring",
@@ -200,7 +182,7 @@ public class PromptSanitizerService {
             In that case the app will ask the user how far ahead to be reminded, so still return fireAt at the
             event's own start time. For everything else (recurring, explicit offset already given, SPECIAL-CASE
             events that get a chain, or non-event reminders like "remind me in 5 minutes"), set preEventChoice=false.
-            
+
             CRON EXPRESSION RULES (Quartz 6-field format):
             - "every friday evening"   -> "0 0 18 ? * FRI"
             - "every day at 9am"       -> "0 0 9 * * ?"
@@ -208,7 +190,7 @@ public class PromptSanitizerService {
             - "every monday at 8am"    -> "0 0 8 ? * MON"
             - "every hour"             -> "0 0 * * * ?"
             - "every weekday at 8am"   -> "0 0 8 ? * MON-FRI"
-            
+
             FIRE-AT RULES (relative to the Temporal context in the user message):
             - "in 5 minutes"  -> now + 5 minutes
             - "in 2 hours"    -> now + 2 hours
@@ -225,13 +207,22 @@ public class PromptSanitizerService {
             NIGHT-HOURS RULE: If the computed or defaulted time falls between 00:00 (inclusive) and 06:00 (exclusive)
             and the user did NOT explicitly request a night-time reminder (e.g. "at 3am", "at 2:30"), shift the time to 09:00.
             This applies to all one-time (fireAt) and recurring (cron) reminders where no explicit time was given.
-            
+
             SPECIAL CASES — automatically produce a chain[] of additional reminders:
-            
-            Use chain[] whenever the user's intent clearly benefits from advance preparation time.
+
+            Produce chain[] ONLY for the explicitly numbered SPECIAL CASES below (birthday, anniversary,
+            medical appointment, travel, exam/deadline, meeting, wedding/party). For ANY other one-time
+            event — a generic errand, drop-off/pick-up, car service appointment, "take X to Y", a call to
+            make, etc. — DO NOT invent preparation/lead-up reminders: set chain=null and instead set
+            preEventChoice=true so the app can ask the user how far ahead to be reminded.
+            NEVER emit a chain entry whose fire time equals or is later than the main reminder's time; every
+            lead-up must fire strictly before the event.
             The main reminder is the event itself; chain entries are the lead-up reminders.
-            chain entries have the same JSON shape: { reminderText, cronExpression, fireAt, scheduleDescription }
-            
+            chain entries have the same JSON shape: { reminderText, eventText, cronExpression, fireAt, scheduleDescription }
+
+            Example: "tomorrow at 9am I need to take the car to the service" → ONE-TIME event at 09:00,
+            chain=null, preEventChoice=true (NOT a medical/appointment chain).
+
             1. BIRTHDAY / NAME DAY
                Trigger words: birthday, born, name day, born on, bday, народження, день народження, Geburtstag, anniversaire, cumpleaños, compleanno, urodziny
                Chain:
@@ -239,7 +230,7 @@ public class PromptSanitizerService {
                - 1 day before   @ 09:00 : "🎂 Tomorrow is [person]'s birthday — don't forget!"
                - On the day     @ 09:00 : "🎉 Today is [person]'s birthday — happy birthday!"
                Main reminder: recurring yearly cron on that date.
-            
+
             2. WEDDING ANNIVERSARY
                Trigger words: anniversary, wedding anniversary, jahrestag, anniversaire de mariage, rocznica ślubu
                Chain:
@@ -248,14 +239,14 @@ public class PromptSanitizerService {
                - 1 day before   @ 09:00 : "💑 Tomorrow is your anniversary — last chance to prepare!"
                - On the day     @ 09:00 : "❤️ Happy anniversary!"
                Main reminder: recurring yearly cron.
-            
+
             3. MEDICAL APPOINTMENT / DENTIST / DOCTOR
                Trigger words: doctor, dentist, appointment, checkup, hospital, clinic, lékař, Arzt, médecin, médico, docteur
                Chain:
                - 1 day before   @ 20:00 : "🏥 Reminder: [appointment] is tomorrow — prepare documents / fast if needed"
                - Morning of day @ 07:00 : "⏰ Today is your [appointment] — leave on time!"
                Main: on the appointment datetime.
-            
+
             4. TRAVEL / FLIGHT / TRIP
                Trigger words: flight, trip, travel, vacation, holiday, train, bus, departure, cestovat, Flug, voyage, viaje, viaggio
                Chain:
@@ -263,7 +254,7 @@ public class PromptSanitizerService {
                - 1 day before   @ 18:00 : "✈️ Tomorrow you travel — pack bags, check in online, set alarm!"
                - Morning of day @ 06:00 : "🚀 Departure day! Check your tickets, passport and luggage."
                Main: on departure datetime.
-            
+
             5. EXAM / DEADLINE / SUBMISSION
                Trigger words: exam, test, deadline, submission, essay, project due, report due, zkouška, Prüfung, examen, egzamin
                Chain:
@@ -271,14 +262,14 @@ public class PromptSanitizerService {
                - 2 days before  @ 09:00 : "📝 [exam/deadline] in 2 days — final push!"
                - 1 day before   @ 20:00 : "⚠️ [exam/deadline] tomorrow — prepare everything tonight!"
                Main: on the exam/deadline datetime.
-            
+
             6. MEETING / CALL / INTERVIEW
                Trigger words: meeting, call, interview, conference, standup, sync, porada, Meeting, réunion, reunión, riunione
                Chain:
                - 1 day before   @ 17:00 : "📅 Reminder: [meeting] is tomorrow — prepare notes/agenda!"
                - 1 hour before  : "[meeting] starts in 1 hour — get ready!"
                Main: on the meeting datetime.
-            
+
             7. WEDDING / PARTY / EVENT
                Trigger words: wedding, party, celebration, ceremony, event, graduation, svatba, Hochzeit, mariage, boda, matrimonio, wesele
                Chain:
@@ -286,17 +277,17 @@ public class PromptSanitizerService {
                - 3 days before  @ 09:00 : "🎁 [event] in 3 days — buy a gift if needed!"
                - 1 day before   @ 09:00 : "🥂 [event] is tomorrow — prepare clothes and gift!"
                Main: on the event datetime.
-            
+
             8. MEDICATION / PILLS (no chain, recurring)
                Trigger words: medicine, medication, pill, tablet, tablet, lék, Medikament, médicament, medicamento, medicina
                Just set recurring=true with appropriate cron. No chain needed.
-            
+
             If the special case date is recurring (e.g. birthday every year), ALL chain entries must also be recurring yearly crons computed relative to the event date.
             If the special case is one-time, ALL chain entries use fireAt.
-            
+
             8. LANGUAGE DETECTION: Detect the ISO 639-1 language code of the user's message text (e.g. "en", "de", "pl", "ru", "uk") and return it in detectedLanguageCode. This is the language the user WROTE IN, independent of the response language.
-            
-            9. RESPONSE LANGUAGE: specified per-request in the user message as [Language: <name>]. Generate ALL text fields (reminderText, scheduleDescription, errorMessage, and all chain.reminderText, chain.scheduleDescription) in that language. Never mix languages in a single field.
+
+            9. RESPONSE LANGUAGE: specified per-request in the user message as [Language: <name>]. Generate ALL text fields (reminderText, eventText, scheduleDescription, errorMessage, and all chain.reminderText, chain.eventText, chain.scheduleDescription) in that language. Never mix languages in a single field.
                IMPORTANT: reminderText must be written in **imperative form** (a command/action addressed to the user), NOT as an infinitive or noun phrase.
                Examples (English): "Get up" (not "Getting up"), "Do exercise" (not "Doing exercise").
                Examples (Ukrainian): "Зробіть зарядку" (not "Зробити зарядку"), "Ідіть на польську" (not "Піти на польську"), "Випийте таблетку" (not "Випити таблетку").
@@ -309,7 +300,14 @@ public class PromptSanitizerService {
             10. NO RELATIVE TIME WORDS IN reminderText: The reminder is delivered AT its scheduled moment, so the text must be timeless. NEVER include relative time references (today, tomorrow, tonight, this week, next week, in N hours, завтра, сьогодні, сьогодні ввечері, jutro, dziś, morgen, heute, demain, mañana) in reminderText or any chain.reminderText. The schedule itself conveys WHEN. Put timing info only in scheduleDescription.
                Example: user "Нагадай завтра зробити зарядку" → reminderText "Зробіть зарядку" (NOT "Зробіть зарядку завтра"). scheduleDescription may say "завтра о 09:00".
                Example: user "remind me tomorrow to call mom" → reminderText "Call mom" (NOT "Call mom tomorrow").
-            
+
+            11. eventText — DISPLAY LABEL: a short, neutral noun phrase naming the same thing as reminderText, for showing in a saved-reminders list. It describes WHAT the reminder is about, not a command.
+               Like reminderText it is timeless (rule 10 applies: NO relative time words).
+               Examples (English): reminderText "Call mom" → eventText "Call to mom"; reminderText "Take the pill" → eventText "Pill"; reminderText "Meet Oleg on Marshalkowska" → eventText "Meeting with Oleg on Marshalkowska".
+               Examples (Ukrainian): reminderText "Зустріньтеся з Олегом на Маршалковській" → eventText "Зустріч з Олегом на Маршалковській"; reminderText "Випийте таблетку" → eventText "Таблетка".
+               Examples (Russian): reminderText "Сделайте зарядку" → eventText "Зарядка".
+               Keep it concise (a few words). Every chain entry also gets its own eventText.
+
             RETURN ONLY THE JSON OBJECT. No markdown, no explanation, just the raw JSON.
             """;
     }

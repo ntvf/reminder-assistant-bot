@@ -19,11 +19,6 @@ public class RateLimitService {
         this.appProperties = appProperties;
     }
 
-    /**
-     * Increments the daily request counter for the given chat and throws
-     * {@link RateLimitExceededException} if the limit is exceeded.
-     * The increment happens before the check so the count is always accurate.
-     */
     @Transactional
     public void checkAndIncrement(String chatId, MessengerType messengerType, String languageCode) {
         var today = LocalDate.now();

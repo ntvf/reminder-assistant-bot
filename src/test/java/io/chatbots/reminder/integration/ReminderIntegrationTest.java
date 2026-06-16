@@ -46,7 +46,7 @@ class ReminderIntegrationTest {
 
     @Test
     void createReminder_persistedToDatabase() {
-        var parseResult = new ReminderParseResult("Feed the leaven", true, "0 0 18 ? * FRI",
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI",
             null, "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -64,7 +64,7 @@ class ReminderIntegrationTest {
 
     @Test
     void listReminders_afterCreate_showsReminder() {
-        var parseResult = new ReminderParseResult("Buy flowers", false, null,
+        var parseResult = new ReminderParseResult("Buy flowers", null, false, null,
             LocalDateTime.now().plusDays(7), "In one week", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -77,7 +77,7 @@ class ReminderIntegrationTest {
 
     @Test
     void deleteReminder_removesFromActiveList() {
-        var parseResult = new ReminderParseResult("Call dentist", false, null,
+        var parseResult = new ReminderParseResult("Call dentist", null, false, null,
             LocalDateTime.now().plusDays(1), "Tomorrow", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -98,7 +98,7 @@ class ReminderIntegrationTest {
 
     @Test
     void maxRemindersLimit_enforced() {
-        var parseResult = new ReminderParseResult("Reminder", true, "0 0 9 * * ?",
+        var parseResult = new ReminderParseResult("Reminder", null, true, "0 0 9 * * ?",
             null, "Every day at 9", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -115,7 +115,7 @@ class ReminderIntegrationTest {
 
     @Test
     void statistics_returnsCorrectCounts() {
-        var parseResult = new ReminderParseResult("Test", true, "0 0 9 * * ?",
+        var parseResult = new ReminderParseResult("Test", null, true, "0 0 9 * * ?",
             null, "Every day", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -128,7 +128,7 @@ class ReminderIntegrationTest {
 
     @Test
     void updateTimezone_persistsToDatabase() {
-        var parseResult = new ReminderParseResult("Test", true, "0 0 9 * * ?",
+        var parseResult = new ReminderParseResult("Test", null, true, "0 0 9 * * ?",
             null, "Every day", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         reminderService.createReminder(new MessengerMessage("chat-7", MessengerType.TELEGRAM, "Remind me daily", "u7", 7L), "en");
@@ -145,14 +145,14 @@ class ReminderIntegrationTest {
     void createReminder_withChain_persistsAllReminders() {
         var chain = List.of(
             new io.chatbots.reminder.ai.ChainedReminder(
-                "🎁 One week until wife's birthday — buy a gift!",
+                "🎁 One week until wife's birthday — buy a gift!", null,
                 "0 0 9 8 3 ?", null, "One week before, yearly"),
             new io.chatbots.reminder.ai.ChainedReminder(
-                "🎂 Tomorrow is wife's birthday!",
+                "🎂 Tomorrow is wife's birthday!", null,
                 "0 0 9 14 3 ?", null, "Day before, yearly")
         );
         var parseResult = new ReminderParseResult(
-            "🎉 Happy birthday to your wife!", true, "0 0 9 15 3 ?",
+            "🎉 Happy birthday to your wife!", null, true, "0 0 9 15 3 ?",
             null, "Every March 15 at 09:00", true, null, chain, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
