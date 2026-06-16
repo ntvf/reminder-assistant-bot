@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface ReminderRepository extends JpaRepository<Reminder, Long> {
-    List<Reminder> findByChatUserAndActiveTrue(ChatUser chatUser);
+    List<Reminder> findByChatUserAndActiveTrueOrderByIdAsc(ChatUser chatUser);
     List<Reminder> findByChatUser(ChatUser chatUser);
     long countByChatUserAndActiveTrue(ChatUser chatUser);
     @Query("SELECT r FROM Reminder r JOIN FETCH r.chatUser WHERE r.active = true")

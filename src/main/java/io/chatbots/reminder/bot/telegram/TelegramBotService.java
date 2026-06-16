@@ -15,14 +15,19 @@ import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
@@ -42,6 +47,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class TelegramBotService implements SpringLongPollingBot, MessengerSender {
@@ -122,6 +132,30 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     private final TimezoneGeoService timezoneGeoService;
     private final AppProperties appProperties;
 
+    /** Reminder messages received before the user confirmed a timezone, replayed once it is set. */
+    private final Map<String, MessengerMessage> pendingReminders = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Text of forwarded messages awaiting a lead-time choice, keyed by "chatId:buttonsMessageId".
+     * Filled when a forward is received, drained when the user taps a lead-time button.
+     */
+    private final Map<String, String> forwardTexts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Parsed direct-typed events awaiting a lead-time choice, keyed by "chatId:buttonsMessageId".
+     * Unlike forwards, the event is already parsed, so the chosen offset is applied locally (no second LLM call).
+     */
+    private final Map<String, ReminderService.LeadChoiceDraft> leadDrafts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Braille frames cycled to animate the "processing…" placeholder while a reminder is created. */
+    private static final String[] SPINNER_FRAMES = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
+    private static final long SPINNER_INTERVAL_MS = 700;
+    private final ScheduledExecutorService spinnerExecutor = Executors.newScheduledThreadPool(2, r -> {
+        var t = new Thread(r, "tg-spinner");
+        t.setDaemon(true);
+        return t;
+    });
+
     public TelegramBotService(
             @Value("${telegram.bot-token}") String botToken,
             @Value("${telegram.bot-username}") String botUsername,
@@ -137,6 +171,43 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
         this.statisticsService = statisticsService;
         this.timezoneGeoService = timezoneGeoService;
         this.appProperties = appProperties;
+    }
+
+    // ── Menu button (☰) commands ─────────────────────────────────────────────
+
+    private static final List<String> SUPPORTED_LANG_CODES =
+        List.of("en", "ru", "de", "fr", "es", "pt", "it", "tr", "pl", "uk");
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void registerBotCommands() {
+        registerBotCommands(null); // default (English) for unmatched locales
+        for (var lang : SUPPORTED_LANG_CODES) {
+            registerBotCommands(lang);
+        }
+    }
+
+    private void registerBotCommands(String langCode) {
+        try {
+            telegramClient.execute(buildSetMyCommands(langCode));
+        } catch (TelegramApiException e) {
+            log.error("Failed to register bot commands for lang {}: {}", langCode, e.getMessage(), e);
+        }
+    }
+
+    private SetMyCommands buildSetMyCommands(String langCode) {
+        var commands = List.of(
+            BotCommand.builder()
+                .command("list")
+                .description(BotMessages.get(BotMessages.Key.BTN_LIST, langCode))
+                .build(),
+            BotCommand.builder()
+                .command("timezone")
+                .description(BotMessages.get(BotMessages.Key.BTN_CHANGE_TZ, langCode))
+                .build()
+        );
+        var builder = SetMyCommands.builder().commands(commands);
+        if (langCode != null) builder.languageCode(langCode);
+        return builder.build();
     }
 
     @Override
@@ -248,7 +319,13 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 if (reminders.isEmpty()) {
                     send(chatId, listText);
                 } else {
-                    sendWithMarkup(chatId, listText, buildDeleteKeyboard(reminders));
+                    // Default view is read-only: a single "Manage" button reveals the delete grid on demand.
+                    sendWithMarkup(chatId, listText, buildManageKeyboard(displayLang));
+                }
+                // Remove the user's command / button-tap message to keep the chat clean.
+                // Telegram only lets bots delete incoming messages in private chats.
+                if (!isGroup) {
+                    deleteMessage(chatId, message.getMessageId());
                 }
             } else if (text.startsWith("/delete ")) {
                 var parts = text.split("\\s+", 2);
@@ -259,12 +336,28 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             } else if (text.startsWith("/timezone ")) {
                 var tz = text.substring("/timezone ".length()).trim();
                 sendWithMarkup(chatId, reminderService.updateTimezone(chatId, MessengerType.TELEGRAM, tz), buildMainKeyboard(displayLang));
+                if (reminderService.isTimezoneConfirmed(chatId, MessengerType.TELEGRAM)) {
+                    replayPendingReminder(chatId, displayLang);
+                }
             } else if (text.startsWith("/stats")) {
                 send(chatId, statisticsService.buildStatsReport());
             } else if (text.startsWith("/")) {
                 send(chatId, BotMessages.get(BotMessages.Key.UNKNOWN_CMD, displayLang));
             } else if (!text.isBlank()) {
-                send(chatId, reminderService.createReminder(messengerMessage, languageCode));
+                if (!reminderService.isTimezoneConfirmed(chatId, MessengerType.TELEGRAM)) {
+                    // Without a confirmed timezone the bot's clock differs from the user's,
+                    // producing reminders at the wrong wall-clock time. Onboard first, then
+                    // replay this message so the user doesn't have to retype it.
+                    pendingReminders.put(chatId, messengerMessage);
+                    send(chatId, BotMessages.get(BotMessages.Key.TZ_NEEDED_FIRST, displayLang));
+                    sendTimezoneRequest(chatId, displayLang);
+                } else if (!isGroup && message.getForwardDate() != null) {
+                    // Forwarded event announcement: timing intent is ambiguous (fire at the event,
+                    // or ahead of it?). Ask the user with lead-time buttons instead of guessing.
+                    promptForwardLeadTime(chatId, text, displayLang);
+                } else {
+                    handleReminderCreation(chatId, messengerMessage, languageCode, displayLang);
+                }
             }
         } catch (NumberFormatException e) {
             send(chatId, BotMessages.get(BotMessages.Key.INVALID_ID, displayLang));
@@ -278,6 +371,182 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             log.error("Error handling update for chat {}: {}", chatId, e.getMessage(), e);
             send(chatId, BotMessages.get(BotMessages.Key.WRONG, displayLang));
         }
+    }
+
+    /** Processes a reminder message that was stashed while the user set their timezone. */
+    private void replayPendingReminder(String chatId, String displayLang) {
+        var pending = pendingReminders.remove(chatId);
+        if (pending == null) return;
+        handleReminderCreation(chatId, pending, displayLang, displayLang);
+    }
+
+    /**
+     * Posts an animated "processing…" placeholder, runs the (slow, AI-backed) reminder creation,
+     * then replaces the placeholder in-place with the final result. Errors replace the placeholder
+     * too, so the user never sees a stranded spinner.
+     */
+    private void handleReminderCreation(String chatId, MessengerMessage message, String languageCode, String displayLang) {
+        var processingText = BotMessages.get(BotMessages.Key.PROCESSING, displayLang);
+        var placeholderId = sendReturningId(chatId, SPINNER_FRAMES[0] + " " + processingText);
+        var stopSpinner = placeholderId != null ? startSpinner(chatId, placeholderId, processingText) : null;
+
+        ReminderService.ReminderOutcome outcome;
+        try {
+            outcome = reminderService.createOrOfferLeadTime(message, languageCode);
+        } catch (OffTopicRequestException e) {
+            outcome = ReminderService.ReminderOutcome.text(BotMessages.get(BotMessages.Key.OFFTOPIC, displayLang));
+        } catch (MaxRemindersExceededException | RateLimitExceededException e) {
+            outcome = ReminderService.ReminderOutcome.text(e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to create reminder for chat {}: {}", chatId, e.getMessage(), e);
+            outcome = ReminderService.ReminderOutcome.text(BotMessages.get(BotMessages.Key.WRONG, displayLang));
+        } finally {
+            if (stopSpinner != null) stopSpinner.run();
+        }
+
+        // Detected an event with no explicit reminder offset → ask how far ahead via buttons instead of persisting.
+        if (outcome.leadChoice() != null && placeholderId != null) {
+            if (leadDrafts.size() > 500) leadDrafts.clear();
+            leadDrafts.put(chatId + ":" + placeholderId, outcome.leadChoice());
+            editInlineKeyboard(chatId, placeholderId,
+                BotMessages.get(BotMessages.Key.FWD_ASK, displayLang), buildLeadTimeKeyboard(displayLang, "lead"));
+            return;
+        }
+
+        // No placeholder to host buttons → just schedule at the event time.
+        var result = outcome.replyText() != null
+            ? outcome.replyText()
+            : reminderService.createTimedReminder(chatId, MessengerType.TELEGRAM,
+                outcome.leadChoice().reminderText(), outcome.leadChoice().eventFireAt(),
+                outcome.leadChoice().eventFireAt(), displayLang);
+        if (placeholderId != null) {
+            editText(chatId, placeholderId, result);
+        } else {
+            send(chatId, result);
+        }
+    }
+
+    // ── Forwarded-message lead-time flow ──────────────────────────────────────
+
+    /** Posts the forwarded text's lead-time question + buttons, stashing the text until a button is tapped. */
+    private void promptForwardLeadTime(String chatId, String forwardText, String displayLang) {
+        var msgId = sendReturningIdWithMarkup(chatId,
+            BotMessages.get(BotMessages.Key.FWD_ASK, displayLang), buildLeadTimeKeyboard(displayLang, "fwd"));
+        if (msgId == null) {
+            // Couldn't show buttons — fall back to creating the reminder at the event time.
+            handleReminderCreation(chatId,
+                new MessengerMessage(chatId, MessengerType.TELEGRAM, forwardText, null, null, true), displayLang, displayLang);
+            return;
+        }
+        // Bound the map so abandoned forwards can't grow it without limit.
+        if (forwardTexts.size() > 500) forwardTexts.clear();
+        forwardTexts.put(chatId + ":" + msgId, forwardText);
+    }
+
+    /** Lead-time buttons. {@code prefix} routes the callback: "fwd" (forwards, re-parse) or "lead" (direct events, local offset). */
+    private InlineKeyboardMarkup buildLeadTimeKeyboard(String languageCode, String prefix) {
+        var rows = new ArrayList<InlineKeyboardRow>();
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder().text(BotMessages.get(BotMessages.Key.FWD_AT, languageCode)).callbackData(prefix + ":at").build())));
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder().text(BotMessages.get(BotMessages.Key.FWD_1H, languageCode)).callbackData(prefix + ":1h").build(),
+            InlineKeyboardButton.builder().text(BotMessages.get(BotMessages.Key.FWD_3H, languageCode)).callbackData(prefix + ":3h").build())));
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder().text(BotMessages.get(BotMessages.Key.FWD_1D, languageCode)).callbackData(prefix + ":1d").build())));
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder().text(BotMessages.get(BotMessages.Key.BTN_CANCEL, languageCode)).callbackData(prefix + ":cancel").build())));
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
+    /** Handles a lead-time button tap: appends a scheduling directive to the forwarded text and creates the reminder. */
+    private void handleForwardLeadTime(String chatId, int messageId, String option, Long userId, String username, String languageCode) {
+        var key = chatId + ":" + messageId;
+        if ("cancel".equals(option)) {
+            forwardTexts.remove(key);
+            deleteMessage(chatId, messageId);
+            return;
+        }
+        var forwardText = forwardTexts.remove(key);
+        var profileLang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+        var displayLang = profileLang != null ? profileLang : languageCode;
+        if (forwardText == null) {
+            // Stash expired (e.g. after a restart) — nothing to act on.
+            editText(chatId, messageId, BotMessages.get(BotMessages.Key.WRONG, displayLang));
+            return;
+        }
+        var directive = switch (option) {
+            case "1h" -> "\n\n[INSTRUCTION: Schedule the reminder to fire 1 hour before the event's start time.]";
+            case "3h" -> "\n\n[INSTRUCTION: Schedule the reminder to fire 3 hours before the event's start time.]";
+            case "1d" -> "\n\n[INSTRUCTION: Schedule the reminder to fire the day before the event at 09:00.]";
+            default   -> "\n\n[INSTRUCTION: Schedule the reminder to fire exactly at the event's start time.]";
+        };
+        var message = new MessengerMessage(chatId, MessengerType.TELEGRAM, forwardText + directive, username, userId, true);
+
+        editText(chatId, messageId, BotMessages.get(BotMessages.Key.PROCESSING, displayLang));
+        String result;
+        try {
+            result = reminderService.createReminder(message, displayLang);
+        } catch (OffTopicRequestException e) {
+            result = BotMessages.get(BotMessages.Key.OFFTOPIC, displayLang);
+        } catch (MaxRemindersExceededException | RateLimitExceededException e) {
+            result = e.getMessage();
+        } catch (Exception e) {
+            log.error("Failed to create forwarded reminder for chat {}: {}", chatId, e.getMessage(), e);
+            result = BotMessages.get(BotMessages.Key.WRONG, displayLang);
+        }
+        editText(chatId, messageId, result);
+    }
+
+    /** Handles a lead-time tap for a directly-typed event: applies the offset to the parsed event time locally and persists. */
+    private void handleEventLeadTime(String chatId, int messageId, String option, String languageCode) {
+        var key = chatId + ":" + messageId;
+        var profileLang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+        var displayLang = profileLang != null ? profileLang : languageCode;
+        if ("cancel".equals(option)) {
+            leadDrafts.remove(key);
+            deleteMessage(chatId, messageId);
+            return;
+        }
+        var draft = leadDrafts.remove(key);
+        if (draft == null) {
+            editText(chatId, messageId, BotMessages.get(BotMessages.Key.WRONG, displayLang));
+            return;
+        }
+        var event = draft.eventFireAt();
+        var fireAt = switch (option) {
+            case "1h" -> event.minusHours(1);
+            case "3h" -> event.minusHours(3);
+            case "1d" -> event.minusDays(1).withHour(9).withMinute(0).withSecond(0).withNano(0);
+            default   -> event;
+        };
+        editText(chatId, messageId, BotMessages.get(BotMessages.Key.PROCESSING, displayLang));
+        String result;
+        try {
+            // Fall back to the event time itself if the offset lands in the past.
+            result = reminderService.createTimedReminder(chatId, MessengerType.TELEGRAM,
+                draft.reminderText(), fireAt, event, displayLang);
+        } catch (MaxRemindersExceededException | RateLimitExceededException e) {
+            result = e.getMessage();
+        } catch (Exception e) {
+            log.error("Failed to create lead-time reminder for chat {}: {}", chatId, e.getMessage(), e);
+            result = BotMessages.get(BotMessages.Key.WRONG, displayLang);
+        }
+        editText(chatId, messageId, result);
+    }
+
+    /** Animates the placeholder by cycling a braille spinner frame. Returns a stopper to halt it. */
+    private Runnable startSpinner(String chatId, int messageId, String processingText) {
+        var stopped = new AtomicBoolean(false);
+        var frame = new AtomicInteger(0);
+        var future = spinnerExecutor.scheduleAtFixedRate(() -> {
+            if (stopped.get()) return;
+            var i = frame.incrementAndGet() % SPINNER_FRAMES.length;
+            editText(chatId, messageId, SPINNER_FRAMES[i] + " " + processingText);
+        }, SPINNER_INTERVAL_MS, SPINNER_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        return () -> {
+            stopped.set(true);
+            future.cancel(false);
+        };
     }
 
     // ── Timezone onboarding ───────────────────────────────────────────────────
@@ -317,6 +586,9 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     private void handleLocationMessage(String chatId, Location location, String languageCode) {
         sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_LOCATING, languageCode),
             ReplyKeyboardRemove.builder().removeKeyboard(true).build());
+
+        reminderService.saveLocation(chatId, MessengerType.TELEGRAM,
+            location.getLatitude(), location.getLongitude(), languageCode);
 
         var detected = timezoneGeoService.findTimezone(location.getLatitude(), location.getLongitude());
 
@@ -397,15 +669,59 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
 
         if ("del:cancel".equals(data)) {
             try {
+                var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+                var displayLang = lang != null ? lang : languageCode;
                 var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
-                var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
+                var backToManage = reminders.isEmpty();
+                var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM, !backToManage);
                 editInlineKeyboard(chatId, messageId, updatedText,
-                    reminders.isEmpty()
-                        ? InlineKeyboardMarkup.builder().keyboard(List.of()).build()
-                        : buildDeleteKeyboard(reminders));
+                    backToManage
+                        ? buildManageKeyboard(displayLang)
+                        : buildNumberGrid(reminders, displayLang));
             } catch (Exception e) {
                 log.warn("Failed to restore list keyboard in chat {}: {}", chatId, e.getMessage());
             }
+            return;
+        }
+
+        if ("list:cancel".equals(data)) {
+            deleteMessage(chatId, messageId);
+            return;
+        }
+
+        if ("list:manage".equals(data)) {
+            // Reveal the compact number grid and renumber the list so taps map to lines.
+            var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
+            var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+            var displayLang = lang != null ? lang : languageCode;
+            if (reminders.isEmpty()) {
+                editInlineKeyboard(chatId, messageId,
+                    reminderService.listReminders(chatId, MessengerType.TELEGRAM), buildManageKeyboard(displayLang));
+            } else {
+                editInlineKeyboard(chatId, messageId,
+                    reminderService.listReminders(chatId, MessengerType.TELEGRAM, true), buildNumberGrid(reminders, displayLang));
+            }
+            return;
+        }
+
+        if ("list:done".equals(data)) {
+            // Collapse the grid back to the single Manage button and drop the line numbers.
+            var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+            var displayLang = lang != null ? lang : languageCode;
+            editInlineKeyboard(chatId, messageId,
+                reminderService.listReminders(chatId, MessengerType.TELEGRAM), buildManageKeyboard(displayLang));
+            return;
+        }
+
+        if (data.startsWith("fwd:")) {
+            var userId = from != null ? from.getId() : null;
+            var username = from != null ? from.getUserName() : null;
+            handleForwardLeadTime(chatId, messageId, data.substring("fwd:".length()), userId, username, languageCode);
+            return;
+        }
+
+        if (data.startsWith("lead:")) {
+            handleEventLeadTime(chatId, messageId, data.substring("lead:".length()), languageCode);
             return;
         }
 
@@ -415,14 +731,15 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 var result = reminderService.deleteReminder(chatId, MessengerType.TELEGRAM, reminderId);
                 // Refresh the list message with updated reminders
                 var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
+                var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
+                var displayLang = lang != null ? lang : languageCode;
                 if (reminders.isEmpty()) {
-                    var lang = reminderService.getUserLanguage(chatId, MessengerType.TELEGRAM);
                     editInlineKeyboard(chatId, messageId,
-                        result + "\n\n" + BotMessages.get(BotMessages.Key.NO_REMINDERS, lang),
+                        result + "\n\n" + BotMessages.get(BotMessages.Key.NO_REMINDERS, displayLang),
                         InlineKeyboardMarkup.builder().keyboard(List.of()).build());
                 } else {
-                    var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
-                    editInlineKeyboard(chatId, messageId, updatedText, buildDeleteKeyboard(reminders));
+                    var updatedText = reminderService.listReminders(chatId, MessengerType.TELEGRAM, true);
+                    editInlineKeyboard(chatId, messageId, updatedText, buildNumberGrid(reminders, displayLang));
                 }
             } catch (Exception e) {
                 log.warn("Failed to delete reminder via button in chat {}: {}", chatId, e.getMessage());
@@ -454,6 +771,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 var displayLang = profileLang != null ? profileLang : languageCode;
                 removeInlineKeyboard(chatId, messageId);
                 sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_CONFIRMED, displayLang, tz), buildMainKeyboard(displayLang));
+                replayPendingReminder(chatId, displayLang);
             } catch (Exception e) {
                 log.warn("Failed to confirm timezone {} for chat {}: {}", tz, chatId, e.getMessage());
             }
@@ -471,7 +789,6 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     private ReplyKeyboardMarkup buildMainKeyboard(String languageCode) {
         var row = new KeyboardRow();
         row.add(KeyboardButton.builder().text(BotMessages.get(BotMessages.Key.BTN_LIST, languageCode)).build());
-        row.add(KeyboardButton.builder().text(BotMessages.get(BotMessages.Key.BTN_CHANGE_TZ, languageCode)).build());
         return ReplyKeyboardMarkup.builder()
             .keyboard(List.of(row))
             .resizeKeyboard(true)
@@ -479,18 +796,43 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             .build();
     }
 
-    private InlineKeyboardMarkup buildDeleteKeyboard(List<Reminder> reminders) {
+    /** Read-only list footer: "Manage" reveals the delete grid; "Cancel" closes the message. */
+    private InlineKeyboardMarkup buildManageKeyboard(String languageCode) {
+        return InlineKeyboardMarkup.builder().keyboard(List.of(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder()
+                .text(BotMessages.get(BotMessages.Key.BTN_MANAGE, languageCode))
+                .callbackData("list:manage")
+                .build(),
+            InlineKeyboardButton.builder()
+                .text(BotMessages.get(BotMessages.Key.BTN_CANCEL, languageCode))
+                .callbackData("list:cancel")
+                .build())))).build();
+    }
+
+    /**
+     * Compact delete grid: numbered buttons (5 per row) matching the numbered list lines, plus a Done button.
+     * Far denser than one full-width button per reminder when the user has many.
+     */
+    private InlineKeyboardMarkup buildNumberGrid(List<Reminder> reminders, String languageCode) {
         var rows = new ArrayList<InlineKeyboardRow>();
+        var row = new InlineKeyboardRow();
+        int index = 1;
         for (var reminder : reminders) {
-            var label = reminder.getReminderText();
-            if (label.length() > 32) label = label.substring(0, 30) + "…";
-            var row = new InlineKeyboardRow();
             row.add(InlineKeyboardButton.builder()
-                .text("🗑 " + label)
+                .text(String.valueOf(index++))
                 .callbackData("del:confirm:" + reminder.getId())
                 .build());
-            rows.add(row);
+            if (row.size() == 5) {
+                rows.add(new InlineKeyboardRow(row));
+                row = new InlineKeyboardRow();
+            }
         }
+        if (!row.isEmpty()) rows.add(new InlineKeyboardRow(row));
+        rows.add(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder()
+                .text(BotMessages.get(BotMessages.Key.BTN_DONE, languageCode))
+                .callbackData("list:done")
+                .build())));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 
@@ -539,7 +881,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
 
     private void sendWithMarkup(String chatId, String text, org.telegram.telegrambots.meta.api.interfaces.BotApiObject markup) {
         try {
-            var builder = SendMessage.builder().chatId(chatId).text(text);
+            var builder = SendMessage.builder().chatId(chatId).text(text).parseMode("HTML");
             if (markup instanceof org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard kb) {
                 builder.replyMarkup(kb);
             } else if (markup instanceof InlineKeyboardMarkup inlineKb) {
@@ -548,6 +890,45 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             telegramClient.execute(builder.build());
         } catch (TelegramApiException e) {
             log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
+        }
+    }
+
+    /** Sends a message and returns its Telegram message id, or null if sending failed. */
+    private Integer sendReturningId(String chatId, String text) {
+        try {
+            var sent = telegramClient.execute(
+                SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").build());
+            return sent != null ? sent.getMessageId() : null;
+        } catch (TelegramApiException e) {
+            log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Sends a message with an inline keyboard and returns its Telegram message id, or null if sending failed. */
+    private Integer sendReturningIdWithMarkup(String chatId, String text, InlineKeyboardMarkup keyboard) {
+        try {
+            var sent = telegramClient.execute(
+                SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").replyMarkup(keyboard).build());
+            return sent != null ? sent.getMessageId() : null;
+        } catch (TelegramApiException e) {
+            log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Replaces the text of an existing message (no inline keyboard). */
+    private void editText(String chatId, int messageId, String text) {
+        try {
+            telegramClient.execute(
+                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText.builder()
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .text(text)
+                    .parseMode("HTML")
+                    .build());
+        } catch (TelegramApiException e) {
+            log.warn("Failed to edit message {} in chat {}: {}", messageId, chatId, e.getMessage());
         }
     }
 
@@ -566,11 +947,24 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                         .chatId(chatId)
                         .messageId(messageId)
                         .text(text)
+                        .parseMode("HTML")
                         .replyMarkup(keyboard)
                         .build());
             }
         } catch (TelegramApiException e) {
             log.warn("Failed to edit message {} in chat {}: {}", messageId, chatId, e.getMessage());
+        }
+    }
+
+    private void deleteMessage(String chatId, int messageId) {
+        try {
+            telegramClient.execute(
+                DeleteMessage.builder()
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .build());
+        } catch (TelegramApiException e) {
+            log.warn("Failed to delete message {} in chat {}: {}", messageId, chatId, e.getMessage());
         }
     }
 

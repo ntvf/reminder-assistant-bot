@@ -77,15 +77,51 @@ public class PromptSanitizerService {
         Pattern.compile("(?i)прикидайся")
     );
 
+    /** Directly-typed reminder requests should be short; longer input is truncated to keep parses focused. */
+    private static final int MAX_LENGTH_DIRECT = 300;
+
+    /** Forwards (emails, invites) are legitimately longer; truncate at a higher bound rather than reject. */
+    private static final int MAX_LENGTH_FORWARD = 1000;
+
+    private static final Pattern URL = Pattern.compile("https?://\\S+");
+
+    /** Sanitizes a directly-typed message (capped at {@value #MAX_LENGTH_DIRECT} chars). */
+    public String sanitize(String userMessage) {
+        return sanitize(userMessage, false);
+    }
+
+    /**
+     * Cleans a message before it reaches the LLM: strips URLs and collapses runaway whitespace to cut
+     * token spam, then caps length. Forwarded messages get a higher cap than directly-typed ones, which
+     * are normally short. Length is truncated, not rejected, so a reminder's intent still gets parsed.
+     * Empty input and prompt-injection attempts still throw.
+     */
+    public String sanitize(String userMessage, boolean forwarded) {
+        if (userMessage == null || userMessage.isBlank()) {
+            throw new OffTopicRequestException("Empty message");
+        }
+        var text = URL.matcher(userMessage).replaceAll(" ")   // drop links — pure token spam to the LLM
+            .replaceAll("[ \\t\\x0B\\f\\r]+", " ")            // collapse horizontal whitespace
+            .replaceAll("\\n{3,}", "\n\n")                    // collapse blank-line runs
+            .trim();
+        var max = forwarded ? MAX_LENGTH_FORWARD : MAX_LENGTH_DIRECT;
+        if (text.length() > max) {
+            text = text.substring(0, max);
+        }
+        checkInjection(text);
+        return text;
+    }
+
     public void validateInput(String userMessage) {
         if (userMessage == null || userMessage.isBlank()) {
             throw new OffTopicRequestException("Empty message");
         }
-        if (userMessage.length() > 500) {
-            throw new OffTopicRequestException("Message too long. Please keep reminder requests under 500 characters.");
-        }
+        checkInjection(userMessage);
+    }
+
+    private void checkInjection(String text) {
         for (Pattern pattern : BLOCKED_PATTERNS) {
-            if (pattern.matcher(userMessage).find()) {
+            if (pattern.matcher(text).find()) {
                 log.warn("Blocked prompt injection attempt: {}", pattern.pattern());
                 throw new OffTopicRequestException("I can only help you set up reminders. Please tell me what and when to remind you.");
             }
@@ -151,8 +187,19 @@ public class PromptSanitizerService {
               "scheduleDescription": "human-friendly schedule description (no timezone name, no UTC offset)",
               "valid": true or false,
               "errorMessage": null or explanation if invalid,
-              "chain": null or array of additional reminders (see SPECIAL CASES below)
+              "chain": null or array of additional reminders (see SPECIAL CASES below),
+              "preEventChoice": true or false (see PRE-EVENT CHOICE below)
             }
+
+            PRE-EVENT CHOICE: set preEventChoice=true ONLY when ALL of these hold:
+              - the reminder is one-time (recurring=false, fireAt set), AND
+              - fireAt is a real-world event that has its own start time the user is telling you about
+                (a run, a class, a party, an appointment, a generic "X is happening at <time>"), AND
+              - the user did NOT state when to be reminded relative to it (NOT "remind me 1h before…"), AND
+              - you produced NO chain[] for it (i.e. it is NOT one of the SPECIAL CASES below).
+            In that case the app will ask the user how far ahead to be reminded, so still return fireAt at the
+            event's own start time. For everything else (recurring, explicit offset already given, SPECIAL-CASE
+            events that get a chain, or non-event reminders like "remind me in 5 minutes"), set preEventChoice=false.
             
             CRON EXPRESSION RULES (Quartz 6-field format):
             - "every friday evening"   -> "0 0 18 ? * FRI"
@@ -169,7 +216,12 @@ public class PromptSanitizerService {
             - "in one week"   -> now + 7 days at same time
             - "next monday"   -> coming Monday at 09:00
             - "on March 15"   -> nearest future March 15 at 09:00
-            
+            - "at 14:10" (bare clock time, no day) -> today at that time IF still in the future relative to the
+              Temporal context; otherwise the SAME time TOMORROW. Never return a fireAt in the past.
+            - General rule: a one-time fireAt must ALWAYS be strictly after the Temporal context datetime. If a
+              naive computation lands in the past, roll forward to the next sensible occurrence (next day for a
+              clock time, next year for a calendar date).
+
             NIGHT-HOURS RULE: If the computed or defaulted time falls between 00:00 (inclusive) and 06:00 (exclusive)
             and the user did NOT explicitly request a night-time reminder (e.g. "at 3am", "at 2:30"), shift the time to 09:00.
             This applies to all one-time (fireAt) and recurring (cron) reminders where no explicit time was given.
@@ -246,9 +298,17 @@ public class PromptSanitizerService {
             
             9. RESPONSE LANGUAGE: specified per-request in the user message as [Language: <name>]. Generate ALL text fields (reminderText, scheduleDescription, errorMessage, and all chain.reminderText, chain.scheduleDescription) in that language. Never mix languages in a single field.
                IMPORTANT: reminderText must be written in **imperative form** (a command/action addressed to the user), NOT as an infinitive or noun phrase.
-               Examples: "Get up" (not "Getting up"), "Встаньте" (not "Встати"), "Nimm die Pille" (not "Pille nehmen"), "Achète des fleurs" (not "Acheter des fleurs").
+               Examples (English): "Get up" (not "Getting up"), "Do exercise" (not "Doing exercise").
+               Examples (Ukrainian): "Зробіть зарядку" (not "Зробити зарядку"), "Ідіть на польську" (not "Піти на польську"), "Випийте таблетку" (not "Випити таблетку").
+               Examples (Russian): "Сделайте зарядку" (not "Сделать зарядку").
+               Examples (German): "Nimm die Pille" (not "Pille nehmen"). Examples (French): "Achète des fleurs" (not "Acheter des fleurs").
+               For Slavic languages especially, NEVER leave the verb in the infinitive (-ти/-ть). Always use the second-person imperative.
                The reminder text is sent as a push notification, so it must read as a direct call to action.
                Exception: maintenance reminders may still use "Time to [do it again]: [thing]" format as specified in rule 7.
+
+            10. NO RELATIVE TIME WORDS IN reminderText: The reminder is delivered AT its scheduled moment, so the text must be timeless. NEVER include relative time references (today, tomorrow, tonight, this week, next week, in N hours, завтра, сьогодні, сьогодні ввечері, jutro, dziś, morgen, heute, demain, mañana) in reminderText or any chain.reminderText. The schedule itself conveys WHEN. Put timing info only in scheduleDescription.
+               Example: user "Нагадай завтра зробити зарядку" → reminderText "Зробіть зарядку" (NOT "Зробіть зарядку завтра"). scheduleDescription may say "завтра о 09:00".
+               Example: user "remind me tomorrow to call mom" → reminderText "Call mom" (NOT "Call mom tomorrow").
             
             RETURN ONLY THE JSON OBJECT. No markdown, no explanation, just the raw JSON.
             """;

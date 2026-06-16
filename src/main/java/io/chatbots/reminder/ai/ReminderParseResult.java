@@ -16,5 +16,6 @@ public record ReminderParseResult(
     @JsonProperty("valid") boolean valid,
     @JsonProperty("errorMessage") String errorMessage,
     @JsonProperty("chain") List<ChainedReminder> chain,
-    @JsonProperty("detectedLanguageCode") String detectedLanguageCode
+    @JsonProperty("detectedLanguageCode") String detectedLanguageCode,
+    @JsonProperty("preEventChoice") boolean preEventChoice
 ) {}

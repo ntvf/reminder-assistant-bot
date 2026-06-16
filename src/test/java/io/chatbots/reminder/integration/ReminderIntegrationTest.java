@@ -47,7 +47,7 @@ class ReminderIntegrationTest {
     @Test
     void createReminder_persistedToDatabase() {
         var parseResult = new ReminderParseResult("Feed the leaven", true, "0 0 18 ? * FRI",
-            null, "Every Friday at 18:00", true, null, null, null);
+            null, "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("chat-1", MessengerType.TELEGRAM, "Remind me every friday to feed the leaven", "testuser", 1L);
@@ -56,7 +56,7 @@ class ReminderIntegrationTest {
         assertThat(result).contains("✅");
         var user = chatUserRepository.findByChatIdAndMessengerType("chat-1", MessengerType.TELEGRAM);
         assertThat(user).isPresent();
-        var reminders = reminderRepository.findByChatUserAndActiveTrue(user.get());
+        var reminders = reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(user.get());
         assertThat(reminders).hasSize(1);
         assertThat(reminders.get(0).getReminderText()).isEqualTo("Feed the leaven");
         assertThat(reminders.get(0).isRecurring()).isTrue();
@@ -65,7 +65,7 @@ class ReminderIntegrationTest {
     @Test
     void listReminders_afterCreate_showsReminder() {
         var parseResult = new ReminderParseResult("Buy flowers", false, null,
-            LocalDateTime.now().plusDays(7), "In one week", true, null, null, null);
+            LocalDateTime.now().plusDays(7), "In one week", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("chat-2", MessengerType.TELEGRAM, "Remind me in one week to buy flowers", "user2", 2L);
@@ -78,28 +78,28 @@ class ReminderIntegrationTest {
     @Test
     void deleteReminder_removesFromActiveList() {
         var parseResult = new ReminderParseResult("Call dentist", false, null,
-            LocalDateTime.now().plusDays(1), "Tomorrow", true, null, null, null);
+            LocalDateTime.now().plusDays(1), "Tomorrow", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("chat-3", MessengerType.TELEGRAM, "Remind me tomorrow to call dentist", "user3", 3L);
         reminderService.createReminder(msg, "en");
 
         var user = chatUserRepository.findByChatIdAndMessengerType("chat-3", MessengerType.TELEGRAM);
-        var reminders = reminderRepository.findByChatUserAndActiveTrue(user.orElseThrow());
+        var reminders = reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(user.orElseThrow());
         assertThat(reminders).hasSize(1);
 
         var reminderId = reminders.getFirst().getId();
         var deleteResult = reminderService.deleteReminder("chat-3", MessengerType.TELEGRAM, reminderId);
         assertThat(deleteResult).contains("✅");
 
-        var afterDelete = reminderRepository.findByChatUserAndActiveTrue(user.orElseThrow());
+        var afterDelete = reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(user.orElseThrow());
         assertThat(afterDelete).isEmpty();
     }
 
     @Test
     void maxRemindersLimit_enforced() {
         var parseResult = new ReminderParseResult("Reminder", true, "0 0 9 * * ?",
-            null, "Every day at 9", true, null, null, null);
+            null, "Every day at 9", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var chatId = "chat-4";
@@ -116,7 +116,7 @@ class ReminderIntegrationTest {
     @Test
     void statistics_returnsCorrectCounts() {
         var parseResult = new ReminderParseResult("Test", true, "0 0 9 * * ?",
-            null, "Every day", true, null, null, null);
+            null, "Every day", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         reminderService.createReminder(new MessengerMessage("chat-5", MessengerType.TELEGRAM, "Remind me", "u5", 5L), "en");
@@ -129,7 +129,7 @@ class ReminderIntegrationTest {
     @Test
     void updateTimezone_persistsToDatabase() {
         var parseResult = new ReminderParseResult("Test", true, "0 0 9 * * ?",
-            null, "Every day", true, null, null, null);
+            null, "Every day", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         reminderService.createReminder(new MessengerMessage("chat-7", MessengerType.TELEGRAM, "Remind me daily", "u7", 7L), "en");
 
@@ -153,7 +153,7 @@ class ReminderIntegrationTest {
         );
         var parseResult = new ReminderParseResult(
             "🎉 Happy birthday to your wife!", true, "0 0 9 15 3 ?",
-            null, "Every March 15 at 09:00", true, null, chain, null);
+            null, "Every March 15 at 09:00", true, null, chain, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("chat-8", MessengerType.TELEGRAM,
@@ -163,7 +163,7 @@ class ReminderIntegrationTest {
         assertThat(result).contains("✅").contains("lead-up reminders");
 
         var user = chatUserRepository.findByChatIdAndMessengerType("chat-8", MessengerType.TELEGRAM);
-        var reminders = reminderRepository.findByChatUserAndActiveTrue(user.orElseThrow());
+        var reminders = reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(user.orElseThrow());
         assertThat(reminders).hasSize(3);
     }
 }

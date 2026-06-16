@@ -42,11 +42,12 @@ public class ReminderAiService {
                 {"type": "null"}
               ]
             },
-            "detectedLanguageCode": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+            "detectedLanguageCode": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "preEventChoice":       {"type": "boolean"}
           },
           "required": ["reminderText", "recurring", "cronExpression", "fireAt",
                        "scheduleDescription", "valid", "errorMessage", "chain",
-                       "detectedLanguageCode"],
+                       "detectedLanguageCode", "preEventChoice"],
           "additionalProperties": false
         }
         """;

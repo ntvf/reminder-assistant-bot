@@ -12,7 +12,9 @@ public final class BotMessages {
         ASK_TIMEZONE, TZ_DETECTED, TZ_CONFIRMED, TZ_CHOOSE_REGION,
         TZ_LOCATING, TZ_CHOOSE_DIFFERENTLY, TZ_SHARE_LOCATION,
         BTN_LIST, BTN_CHANGE_TZ, BTN_CANCEL, BTN_CONFIRM_DELETE,
-        REMINDER_FIRED
+        REMINDER_FIRED, TZ_NEEDED_FIRST, PROCESSING,
+        FWD_ASK, FWD_AT, FWD_1H, FWD_3H, FWD_1D,
+        BTN_MANAGE, BTN_DONE
     }
 
     private static final Map<Key, String> EN = Map.ofEntries(
@@ -35,17 +37,26 @@ public final class BotMessages {
         Map.entry(Key.RATE_LIMITED, "⚠️ You've reached the daily limit of %d reminder requests. Try again tomorrow."),
         Map.entry(Key.START, "👋 Hello, %s! I'm your Reminder Assistant.\n\nJust tell me what to remind you about:\n• Remind me to take my pill every day at 8am\n• Mom's birthday is March 5th → yearly chain of reminders\n• My flight is next Tuesday at 14 → trip reminders\n• Oil was changed in the car → I'll remind you in a year\n\nUse the buttons below or just type naturally."),
         Map.entry(Key.ASK_TIMEZONE, "📍 Share your location to automatically set your timezone.\n\nOr pick a region below:"),
+        Map.entry(Key.TZ_NEEDED_FIRST, "🕐 First, let's set your timezone so reminders fire at the right time."),
         Map.entry(Key.TZ_DETECTED, "🌍 Detected timezone: %s\nIs this correct?"),
         Map.entry(Key.TZ_CONFIRMED, "✅ Timezone set to %s. Your reminders will use this timezone."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Choose your region:"),
         Map.entry(Key.TZ_LOCATING, "📍 Got your location, detecting timezone…"),
+        Map.entry(Key.PROCESSING, "Processing your reminder…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Choose differently"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Share Location"),
         Map.entry(Key.BTN_LIST, "📋 My Reminders"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Change Timezone"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancel"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Yes, delete"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")    );
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 When should I remind you about this?"),
+        Map.entry(Key.FWD_AT, "🔔 At event time"),
+        Map.entry(Key.FWD_1H, "⏰ 1 hour before"),
+        Map.entry(Key.FWD_3H, "⏰ 3 hours before"),
+        Map.entry(Key.FWD_1D, "📅 Day before"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Manage"),
+        Map.entry(Key.BTN_DONE, "✅ Done"));
 
     private static final Map<Key, String> RU = Map.ofEntries(
         Map.entry(Key.REMINDER_SET, "✅ Напоминание создано!"),
@@ -71,13 +82,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Часовой пояс установлен: %s. Напоминания будут использовать этот пояс."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Выбери регион:"),
         Map.entry(Key.TZ_LOCATING, "📍 Местоположение получено, определяю часовой пояс…"),
+        Map.entry(Key.PROCESSING, "Обрабатываю напоминание…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Выбрать другой"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Поделиться местоположением"),
         Map.entry(Key.BTN_LIST, "📋 Мои напоминания"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Изменить часовой пояс"),
         Map.entry(Key.BTN_CANCEL, "✖️ Отмена"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Да, удалить"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Когда напомнить об этом?"),
+        Map.entry(Key.FWD_AT, "🔔 В момент события"),
+        Map.entry(Key.FWD_1H, "⏰ За 1 час"),
+        Map.entry(Key.FWD_3H, "⏰ За 3 часа"),
+        Map.entry(Key.FWD_1D, "📅 За день"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Управлять"),
+        Map.entry(Key.BTN_DONE, "✅ Готово")
     );
 
     private static final Map<Key, String> DE = Map.ofEntries(
@@ -104,13 +123,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Zeitzone festgelegt: %s. Deine Erinnerungen verwenden diese Zeitzone."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Wähle deine Region:"),
         Map.entry(Key.TZ_LOCATING, "📍 Standort erhalten, erkenne Zeitzone…"),
+        Map.entry(Key.PROCESSING, "Verarbeite deine Erinnerung…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Andere wählen"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Standort teilen"),
         Map.entry(Key.BTN_LIST, "📋 Meine Erinnerungen"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Zeitzone ändern"),
         Map.entry(Key.BTN_CANCEL, "✖️ Abbrechen"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Ja, löschen"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Wann soll ich dich daran erinnern?"),
+        Map.entry(Key.FWD_AT, "🔔 Zur Eventzeit"),
+        Map.entry(Key.FWD_1H, "⏰ 1 Stunde vorher"),
+        Map.entry(Key.FWD_3H, "⏰ 3 Stunden vorher"),
+        Map.entry(Key.FWD_1D, "📅 Tag davor"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Verwalten"),
+        Map.entry(Key.BTN_DONE, "✅ Fertig")
     );
 
     private static final Map<Key, String> FR = Map.ofEntries(
@@ -137,13 +164,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Fuseau horaire défini : %s. Tes rappels utiliseront ce fuseau."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Choisis ta région :"),
         Map.entry(Key.TZ_LOCATING, "📍 Position reçue, détection du fuseau horaire…"),
+        Map.entry(Key.PROCESSING, "Traitement de votre rappel…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Choisir autrement"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Partager ma position"),
         Map.entry(Key.BTN_LIST, "📋 Mes rappels"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Changer de fuseau"),
         Map.entry(Key.BTN_CANCEL, "✖️ Annuler"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Oui, supprimer"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Quand veux-tu que je te le rappelle ?"),
+        Map.entry(Key.FWD_AT, "🔔 À l'heure de l'événement"),
+        Map.entry(Key.FWD_1H, "⏰ 1 heure avant"),
+        Map.entry(Key.FWD_3H, "⏰ 3 heures avant"),
+        Map.entry(Key.FWD_1D, "📅 La veille"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Gérer"),
+        Map.entry(Key.BTN_DONE, "✅ Terminé")
     );
 
     private static final Map<Key, String> ES = Map.ofEntries(
@@ -170,13 +205,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Zona horaria establecida: %s. Tus recordatorios usarán esta zona."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Elige tu región:"),
         Map.entry(Key.TZ_LOCATING, "📍 Ubicación recibida, detectando zona horaria…"),
+        Map.entry(Key.PROCESSING, "Procesando tu recordatorio…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Elegir otra zona"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Compartir ubicación"),
         Map.entry(Key.BTN_LIST, "📋 Mis recordatorios"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Cambiar zona horaria"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancelar"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sí, eliminar"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 ¿Cuándo te lo recuerdo?"),
+        Map.entry(Key.FWD_AT, "🔔 A la hora del evento"),
+        Map.entry(Key.FWD_1H, "⏰ 1 hora antes"),
+        Map.entry(Key.FWD_3H, "⏰ 3 horas antes"),
+        Map.entry(Key.FWD_1D, "📅 El día antes"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Gestionar"),
+        Map.entry(Key.BTN_DONE, "✅ Listo")
     );
 
     private static final Map<Key, String> PT = Map.ofEntries(
@@ -203,13 +246,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Fuso horário definido: %s. Os teus lembretes usarão este fuso."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Escolhe a tua região:"),
         Map.entry(Key.TZ_LOCATING, "📍 Localização recebida, a detetar fuso horário…"),
+        Map.entry(Key.PROCESSING, "A processar o teu lembrete…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Escolher outra zona"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Partilhar localização"),
         Map.entry(Key.BTN_LIST, "📋 Os meus lembretes"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Alterar fuso horário"),
         Map.entry(Key.BTN_CANCEL, "✖️ Cancelar"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sim, excluir"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Quando devo lembrar-te disto?"),
+        Map.entry(Key.FWD_AT, "🔔 Na hora do evento"),
+        Map.entry(Key.FWD_1H, "⏰ 1 hora antes"),
+        Map.entry(Key.FWD_3H, "⏰ 3 horas antes"),
+        Map.entry(Key.FWD_1D, "📅 No dia anterior"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Gerir"),
+        Map.entry(Key.BTN_DONE, "✅ Concluído")
     );
 
     private static final Map<Key, String> IT = Map.ofEntries(
@@ -236,13 +287,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Fuso orario impostato: %s. I tuoi promemoria useranno questo fuso."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Scegli la tua regione:"),
         Map.entry(Key.TZ_LOCATING, "📍 Posizione ricevuta, rilevamento del fuso orario…"),
+        Map.entry(Key.PROCESSING, "Elaboro il tuo promemoria…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Scegli diversamente"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Condividi la posizione"),
         Map.entry(Key.BTN_LIST, "📋 I miei promemoria"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Cambia fuso orario"),
         Map.entry(Key.BTN_CANCEL, "✖️ Annulla"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Sì, elimina"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Quando vuoi che te lo ricordi?"),
+        Map.entry(Key.FWD_AT, "🔔 All'ora dell'evento"),
+        Map.entry(Key.FWD_1H, "⏰ 1 ora prima"),
+        Map.entry(Key.FWD_3H, "⏰ 3 ore prima"),
+        Map.entry(Key.FWD_1D, "📅 Il giorno prima"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Gestisci"),
+        Map.entry(Key.BTN_DONE, "✅ Fatto")
     );
 
     private static final Map<Key, String> TR = Map.ofEntries(
@@ -269,13 +328,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Saat dilimi ayarlandı: %s. Hatırlatmalarınız bu saat dilimini kullanacak."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Bölgenizi seçin:"),
         Map.entry(Key.TZ_LOCATING, "📍 Konum alındı, saat dilimi tespit ediliyor…"),
+        Map.entry(Key.PROCESSING, "Hatırlatman işleniyor…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Farklı seç"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Konumu paylaş"),
         Map.entry(Key.BTN_LIST, "📋 Hatırlatmalarım"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Saat dilimini değiştir"),
         Map.entry(Key.BTN_CANCEL, "✖️ İptal"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Evet, sil"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Bunu ne zaman hatırlatayım?"),
+        Map.entry(Key.FWD_AT, "🔔 Etkinlik saatinde"),
+        Map.entry(Key.FWD_1H, "⏰ 1 saat önce"),
+        Map.entry(Key.FWD_3H, "⏰ 3 saat önce"),
+        Map.entry(Key.FWD_1D, "📅 Bir gün önce"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Yönet"),
+        Map.entry(Key.BTN_DONE, "✅ Bitti")
     );
 
     private static final Map<Key, String> PL = Map.ofEntries(
@@ -302,13 +369,21 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Ustawiono strefę czasową: %s. Twoje przypomnienia będą jej używać."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Wybierz swój region:"),
         Map.entry(Key.TZ_LOCATING, "📍 Lokalizacja odebrana, wykrywam strefę czasową…"),
+        Map.entry(Key.PROCESSING, "Przetwarzam przypomnienie…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Wybierz inaczej"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Udostępnij lokalizację"),
         Map.entry(Key.BTN_LIST, "📋 Moje przypomnienia"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Zmień strefę czasową"),
         Map.entry(Key.BTN_CANCEL, "✖️ Anuluj"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Tak, usuń"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.FWD_ASK, "📌 Kiedy mam o tym przypomnieć?"),
+        Map.entry(Key.FWD_AT, "🔔 W czasie wydarzenia"),
+        Map.entry(Key.FWD_1H, "⏰ 1 godzinę wcześniej"),
+        Map.entry(Key.FWD_3H, "⏰ 3 godziny wcześniej"),
+        Map.entry(Key.FWD_1D, "📅 Dzień wcześniej"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Zarządzaj"),
+        Map.entry(Key.BTN_DONE, "✅ Gotowe")
     );
 
     private static final Map<Key, String> UK = Map.ofEntries(
@@ -335,13 +410,22 @@ public final class BotMessages {
         Map.entry(Key.TZ_CONFIRMED, "✅ Часовий пояс встановлено: %s. Твої нагадування використовуватимуть цей пояс."),
         Map.entry(Key.TZ_CHOOSE_REGION, "🌍 Обери свій регіон:"),
         Map.entry(Key.TZ_LOCATING, "📍 Місцезнаходження отримано, визначаю часовий пояс…"),
+        Map.entry(Key.PROCESSING, "Обробляю нагадування…"),
         Map.entry(Key.TZ_CHOOSE_DIFFERENTLY, "🌍 Обрати інший"),
         Map.entry(Key.TZ_SHARE_LOCATION, "📍 Поділитися місцезнаходженням"),
         Map.entry(Key.BTN_LIST, "📋 Мої нагадування"),
         Map.entry(Key.BTN_CHANGE_TZ, "🕐 Змінити часовий пояс"),
         Map.entry(Key.BTN_CANCEL, "✖️ Скасувати"),
         Map.entry(Key.BTN_CONFIRM_DELETE, "✅ Так, видалити"),
-        Map.entry(Key.REMINDER_FIRED, "⏰ %s")
+        Map.entry(Key.REMINDER_FIRED, "⏰ %s"),
+        Map.entry(Key.TZ_NEEDED_FIRST, "🕐 Спершу налаштуймо часовий пояс, щоб нагадування спрацьовували вчасно."),
+        Map.entry(Key.FWD_ASK, "📌 Коли нагадати про це?"),
+        Map.entry(Key.FWD_AT, "🔔 У момент події"),
+        Map.entry(Key.FWD_1H, "⏰ За 1 годину"),
+        Map.entry(Key.FWD_3H, "⏰ За 3 години"),
+        Map.entry(Key.FWD_1D, "📅 За день"),
+        Map.entry(Key.BTN_MANAGE, "🗑 Керувати"),
+        Map.entry(Key.BTN_DONE, "✅ Готово")
     );
 
     private static final Map<String, Map<Key, String>> MESSAGES = Map.of(
@@ -363,6 +447,12 @@ public final class BotMessages {
     public static String get(Key key, String langCode, Object... args) {
         var template = MESSAGES.getOrDefault(normalize(langCode), EN).getOrDefault(key, EN.get(key));
         return args != null && args.length > 0 ? template.formatted(args) : template;
+    }
+
+    /** Escapes the three characters reserved by Telegram's HTML parse mode. */
+    public static String htmlEscape(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /** Returns all translations of a key across every language (for reverse button-text lookup). */
