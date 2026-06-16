@@ -3,6 +3,7 @@ package io.chatbots.reminder.scheduler;
 import io.chatbots.reminder.bot.MessengerSender;
 import io.chatbots.reminder.bot.MessengerType;
 import io.chatbots.reminder.domain.ReminderRepository;
+import io.chatbots.reminder.service.BotMessages;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.slf4j.Logger;
@@ -51,7 +52,7 @@ public class ReminderNotificationJob implements Job {
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("No sender for " + messengerType));
 
-        sender.send(chatId, "⏰ " + reminder.getReminderText());
+        sender.send(chatId, "⏰ <b>" + BotMessages.htmlEscape(reminder.getReminderText()) + "</b>");
         log.info("Sent reminder {} to chat {}", reminderId, chatId);
 
         if (!reminder.isRecurring()) {
