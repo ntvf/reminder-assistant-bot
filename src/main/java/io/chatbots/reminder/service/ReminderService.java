@@ -100,7 +100,8 @@ public class ReminderService {
             return BotMessages.get(BotMessages.Key.FIREAT_INVALID, userLang);
         }
         var scheduleDesc = cronDescriptionService.resolve(null, null, chosen, false, userLang);
-        var saved = saveReminder(chatUser, reminderText, eventText, scheduleDesc, false, null, chosen);
+        var eventAt = chosen.equals(fallbackFireAt) ? null : fallbackFireAt;
+        var saved = saveReminder(chatUser, reminderText, eventText, scheduleDesc, false, null, chosen, eventAt);
         log.info("Created lead-time reminder {} for chat {}", saved.getId(), chatId);
         var label = displayLabel(reminderText, eventText);
         var relWord = chosen.toLocalDate().isEqual(fallbackFireAt.toLocalDate())
@@ -181,8 +182,10 @@ public class ReminderService {
         var scheduleDesc = v.scheduleDesc();
         var chain = v.chain();
 
+        var eventAt = !parseResult.recurring() && parseResult.eventAt() != null
+            && !parseResult.eventAt().equals(parseResult.fireAt()) ? parseResult.eventAt() : null;
         var saved = saveReminder(chatUser, parseResult.reminderText(), parseResult.eventText(), scheduleDesc,
-            parseResult.recurring(), parseResult.cronExpression(), parseResult.fireAt());
+            parseResult.recurring(), parseResult.cronExpression(), parseResult.fireAt(), eventAt);
 
         var response = new StringBuilder(BotMessages.get(BotMessages.Key.REMINDER_SET, userLanguageCode))
             .append("\n📝 <b>")
@@ -207,7 +210,7 @@ public class ReminderService {
                     entry.scheduleDescription(), entry.cronExpression(),
                     entry.fireAt(), entry.cronExpression() != null, userLanguageCode);
                 var chained = saveReminder(chatUser, entry.reminderText(), entry.eventText(), entryDesc,
-                    entry.cronExpression() != null, entry.cronExpression(), entry.fireAt());
+                    entry.cronExpression() != null, entry.cronExpression(), entry.fireAt(), null);
                 response.append("\n  • <i>")
                     .append(BotMessages.htmlEscape(entryDesc))
                     .append("</i> — ")
@@ -261,7 +264,8 @@ public class ReminderService {
     }
 
     private Reminder saveReminder(ChatUser chatUser, String text, String eventText, String scheduleDescription,
-                                  boolean recurring, String cronExpression, java.time.LocalDateTime fireAt) {
+                                  boolean recurring, String cronExpression, java.time.LocalDateTime fireAt,
+                                  java.time.LocalDateTime eventAt) {
         var reminder = new Reminder();
         reminder.setChatUser(chatUser);
         reminder.setReminderText(text);
@@ -270,6 +274,7 @@ public class ReminderService {
         reminder.setRecurring(recurring);
         reminder.setCronExpression(cronExpression);
         reminder.setFireAt(fireAt);
+        reminder.setEventAt(eventAt);
         reminder.setActive(true);
         var saved = reminderRepository.save(reminder);
         eventPublisher.publishEvent(new ReminderCreatedEvent(saved));
@@ -298,20 +303,71 @@ public class ReminderService {
         var sb = new StringBuilder("<b>")
             .append(BotMessages.htmlEscape(BotMessages.get(BotMessages.Key.REMINDERS_HEADER, languageCode)))
             .append("</b>\n\n");
+        var zoneId = ZoneId.of(chatUser.getTimezone() != null && !chatUser.getTimezone().isBlank()
+            ? chatUser.getTimezone() : "UTC");
         int index = 1;
         for (var reminder : reminders) {
+            sb.append("🔔 <b>");
             if (numbered) {
-                sb.append("<b>").append(index++).append(".</b> ");
+                sb.append(index++).append(". ");
             }
-            sb.append("🔔 <b>").append(BotMessages.htmlEscape(reminder.getDisplayText())).append("</b>");
-            sb.append(" — <i>").append(BotMessages.htmlEscape(reminder.getScheduleDescription())).append("</i>");
-            long secs = secondsUntilNextFire(reminder, chatUser.getTimezone());
-            if (secs > 0) {
-                sb.append(" (").append(BotMessages.htmlEscape(BotMessages.formatCountdown(secs, languageCode))).append(")");
+            sb.append(BotMessages.htmlEscape(reminder.getDisplayText())).append("</b>\n");
+
+            var fire = nextFire(reminder, zoneId);
+            var event = reminder.isRecurring() ? null : reminder.getEventAt();
+            boolean sameDay = event != null && fire != null
+                && event.toLocalDate().equals(fire.toLocalDate());
+
+            if (reminder.isRecurring()) {
+                sb.append("  🔁 <i>")
+                    .append(BotMessages.htmlEscape(reminder.getScheduleDescription()))
+                    .append("</i>\n");
+            } else if (event != null) {
+                sb.append("  📅 <i>")
+                    .append(formatCompact(event, languageCode))
+                    .append("</i>\n");
+            }
+
+            if (fire != null) {
+                var fireText = sameDay ? formatTime(fire) : formatCompact(fire, languageCode);
+                sb.append("  ⏰ <i>").append(fireText).append("</i>");
+                long secs = secondsUntilNextFire(reminder, chatUser.getTimezone());
+                if (secs > 0) {
+                    sb.append(" · ").append(BotMessages.htmlEscape(BotMessages.formatCountdown(secs, languageCode)));
+                }
+                sb.append("\n");
             }
             sb.append("\n");
         }
         return sb.toString().trim();
+    }
+
+    private String formatCompact(LocalDateTime dt, String languageCode) {
+        var locale = java.util.Locale.forLanguageTag(
+            languageCode != null && !languageCode.isBlank() ? languageCode : "en");
+        return dt.format(java.time.format.DateTimeFormatter.ofPattern("EEE dd.MM.yyyy HH:mm", locale));
+    }
+
+    private String formatTime(LocalDateTime dt) {
+        return dt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+    }
+
+    private LocalDateTime nextFire(Reminder r, ZoneId zoneId) {
+        if (!r.isRecurring()) {
+            return r.getFireAt();
+        }
+        if (r.getCronExpression() != null) {
+            try {
+                var ce = new CronExpression(r.getCronExpression());
+                ce.setTimeZone(java.util.TimeZone.getTimeZone(zoneId));
+                var next = ce.getNextValidTimeAfter(new Date());
+                if (next != null) {
+                    return LocalDateTime.ofInstant(next.toInstant(), zoneId);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     private long secondsUntilNextFire(Reminder r, String timezone) {

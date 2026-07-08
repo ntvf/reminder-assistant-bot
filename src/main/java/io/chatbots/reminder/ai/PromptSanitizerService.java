@@ -166,12 +166,20 @@ public class PromptSanitizerService {
               "recurring": true or false,
               "cronExpression": "Quartz cron (6 fields: sec min hour dom month dow) or null if one-time",
               "fireAt": "ISO-8601 datetime e.g. 2024-01-15T09:00:00 or null if recurring",
+              "eventAt": "ISO-8601 datetime of the real-world event's own start time, or null (see EVENT TIME below)",
               "scheduleDescription": "human-friendly schedule description (no timezone name, no UTC offset)",
               "valid": true or false,
               "errorMessage": null or explanation if invalid,
               "chain": null or array of additional reminders (see SPECIAL CASES below),
               "preEventChoice": true or false (see PRE-EVENT CHOICE below)
             }
+
+            EVENT TIME: set eventAt to the real-world event's own start time whenever the reminder is tied to an
+            event that has a distinct start time the user tells you about (a deploy at 16:00, a meeting at 10:00,
+            a flight, a party). This holds EVEN when the user already gave an explicit lead offset: for
+            "deploy at 16:00, remind me an hour before", set fireAt=15:00 AND eventAt=16:00. When the reminder
+            fires exactly at the event (no lead) or there is no distinct event time (recurring, "remind me in 5
+            minutes", generic errands), set eventAt=null.
 
             PRE-EVENT CHOICE: set preEventChoice=true ONLY when ALL of these hold:
               - the reminder is one-time (recurring=false, fireAt set), AND

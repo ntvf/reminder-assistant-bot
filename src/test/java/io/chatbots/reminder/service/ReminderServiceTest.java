@@ -62,7 +62,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null,
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null, null,
             "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         var savedReminder = new Reminder();
@@ -83,7 +83,7 @@ class ReminderServiceTest {
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
         var event = LocalDateTime.now().plusDays(2).withHour(15).withMinute(0);
-        var parseResult = new ReminderParseResult("Group run", "Group run", false, null, event,
+        var parseResult = new ReminderParseResult("Group run", "Group run", false, null, event, null,
             "in 2 days at 15:00", true, null, null, null, true);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
@@ -103,7 +103,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null,
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null, null,
             "Every Friday at 18:00", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
         var saved = new Reminder();
@@ -148,7 +148,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult(null, null, false, null, null, null, false, "Not a reminder request", null, null, false);
+        var parseResult = new ReminderParseResult(null, null, false, null, null, null, null, false, "Not a reminder request", null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("123", MessengerType.TELEGRAM, "what is the capital of France?", "user", 1L);
@@ -164,7 +164,7 @@ class ReminderServiceTest {
         when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
             .thenReturn(Optional.of(chatUser));
         when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
-        var parseResult = new ReminderParseResult("something", null, true, "invalid-cron", null, "desc", true, null, null, null, false);
+        var parseResult = new ReminderParseResult("something", null, true, "invalid-cron", null, null, "desc", true, null, null, null, false);
         when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
 
         var msg = new MessengerMessage("123", MessengerType.TELEGRAM, "remind me", "user", 1L);
@@ -189,11 +189,29 @@ class ReminderServiceTest {
         var r1 = new Reminder();
         setReminderIdViaReflection(r1, 1L);
         r1.setReminderText("Feed the leaven");
+        r1.setRecurring(true);
         r1.setScheduleDescription("Every Friday at 18:00");
         when(reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(chatUser)).thenReturn(List.of(r1));
 
         var result = reminderService.listReminders("123", MessengerType.TELEGRAM);
         assertThat(result).contains("Feed the leaven").contains("Every Friday");
+    }
+
+    @Test
+    void listReminders_leadTime_showsEventAndReminderLines() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        when(chatUserRepository.findByChatIdAndMessengerType("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+        var event = LocalDateTime.now().plusDays(3).withHour(16).withMinute(0).withSecond(0).withNano(0);
+        var r1 = new Reminder();
+        setReminderIdViaReflection(r1, 1L);
+        r1.setReminderText("Deploy the release");
+        r1.setFireAt(event.minusHours(1));
+        r1.setEventAt(event);
+        when(reminderRepository.findByChatUserAndActiveTrueOrderByIdAsc(chatUser)).thenReturn(List.of(r1));
+
+        var result = reminderService.listReminders("123", MessengerType.TELEGRAM);
+        assertThat(result).contains("Deploy the release").contains("📅").contains("⏰").contains("16:00").contains("15:00");
     }
 
     @Test

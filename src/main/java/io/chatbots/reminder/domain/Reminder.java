@@ -41,6 +41,9 @@ public class Reminder {
     @Column(name = "fire_at")
     private LocalDateTime fireAt;
 
+    @Column(name = "event_at")
+    private LocalDateTime eventAt;
+
     @Column(name = "quartz_job_key")
     private String quartzJobKey;
 
@@ -118,6 +121,14 @@ public class Reminder {
 
     public void setFireAt(LocalDateTime fireAt) {
         this.fireAt = fireAt;
+    }
+
+    public LocalDateTime getEventAt() {
+        return eventAt;
+    }
+
+    public void setEventAt(LocalDateTime eventAt) {
+        this.eventAt = eventAt;
     }
 
     public String getQuartzJobKey() {

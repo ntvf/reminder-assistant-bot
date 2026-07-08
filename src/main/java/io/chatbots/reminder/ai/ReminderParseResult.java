@@ -13,6 +13,8 @@ public record ReminderParseResult(
     @JsonProperty("cronExpression") String cronExpression,
     @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)
     @JsonProperty("fireAt") LocalDateTime fireAt,
+    @JsonDeserialize(using = FlexibleLocalDateTimeDeserializer.class)
+    @JsonProperty("eventAt") LocalDateTime eventAt,
     @JsonProperty("scheduleDescription") String scheduleDescription,
     @JsonProperty("valid") boolean valid,
     @JsonProperty("errorMessage") String errorMessage,

@@ -20,6 +20,7 @@ public class ReminderAiService {
             "recurring":           {"type": "boolean"},
             "cronExpression":      {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "fireAt":              {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "eventAt":             {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "scheduleDescription": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "valid":               {"type": "boolean"},
             "errorMessage":        {"anyOf": [{"type": "string"}, {"type": "null"}]},
@@ -46,7 +47,7 @@ public class ReminderAiService {
             "detectedLanguageCode": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "preEventChoice":       {"type": "boolean"}
           },
-          "required": ["reminderText", "eventText", "recurring", "cronExpression", "fireAt",
+          "required": ["reminderText", "eventText", "recurring", "cronExpression", "fireAt", "eventAt",
                        "scheduleDescription", "valid", "errorMessage", "chain",
                        "detectedLanguageCode", "preEventChoice"],
           "additionalProperties": false
