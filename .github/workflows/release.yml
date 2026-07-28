@@ -63,7 +63,9 @@ jobs:
 
       - name: Build and extract layers
         run: |
-          ./mvnw package -DskipTests
+          ./mvnw package -DskipTests \
+            -Dbuild.tag=v1.0.${{ github.run_number }} \
+            -Dbuild.commit=${{ github.sha }}
           cp target/reminder-0.0.1-SNAPSHOT.jar target/reminder.jar
 
           # Extract into layers

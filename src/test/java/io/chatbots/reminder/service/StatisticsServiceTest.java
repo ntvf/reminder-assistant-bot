@@ -3,13 +3,17 @@ package io.chatbots.reminder.service;
 import io.chatbots.reminder.bot.MessengerType;
 import io.chatbots.reminder.domain.ChatUserRepository;
 import io.chatbots.reminder.domain.ReminderRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.info.BuildProperties;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -19,9 +23,23 @@ class StatisticsServiceTest {
 
     @Mock ReminderRepository reminderRepository;
     @Mock ChatUserRepository chatUserRepository;
+    @Mock ObjectProvider<BuildProperties> buildPropertiesProvider;
 
-    @InjectMocks
     StatisticsService statisticsService;
+
+    @BeforeEach
+    void setUp() {
+        statisticsService = new StatisticsService(reminderRepository, chatUserRepository, buildPropertiesProvider);
+    }
+
+    private static BuildProperties buildProperties(String tag, String commit) {
+        var props = new Properties();
+        props.setProperty("time", String.valueOf(Instant.parse("2026-07-28T11:20:00Z").toEpochMilli()));
+        props.setProperty("version", "0.0.1-SNAPSHOT");
+        props.setProperty("tag", tag);
+        props.setProperty("commit", commit);
+        return new BuildProperties(props);
+    }
 
     @Test
     void buildStatsReport_returnsFormattedReport() {
@@ -39,6 +57,37 @@ class StatisticsServiceTest {
         var report = statisticsService.buildStatsReport();
 
         assertThat(report).contains("50").contains("120").contains("30").contains("en").contains("de").contains("unknown");
+    }
+
+    @Test
+    void buildStatsReport_withBuildInfo_showsVersionAndCommit() {
+        when(buildPropertiesProvider.getIfAvailable()).thenReturn(buildProperties("v1.0.42", "a1b2c3d4e5f6"));
+        statisticsService = new StatisticsService(reminderRepository, chatUserRepository, buildPropertiesProvider);
+        when(chatUserRepository.count()).thenReturn(0L);
+        when(chatUserRepository.countByMessengerType(MessengerType.TELEGRAM)).thenReturn(0L);
+        when(reminderRepository.countByActiveTrue()).thenReturn(0L);
+        when(reminderRepository.countDistinctActiveUsers()).thenReturn(0L);
+        when(reminderRepository.countActiveByLanguage()).thenReturn(List.of());
+        when(chatUserRepository.countBySource()).thenReturn(List.of());
+
+        var report = statisticsService.buildStatsReport();
+
+        assertThat(report).contains("Version: v1.0.42 (a1b2c3d) · built 2026-07-28 11:20 UTC");
+        assertThat(report).contains("Uptime:");
+    }
+
+    @Test
+    void buildStatsReport_withoutBuildInfo_showsUnknownVersion() {
+        when(chatUserRepository.count()).thenReturn(0L);
+        when(chatUserRepository.countByMessengerType(MessengerType.TELEGRAM)).thenReturn(0L);
+        when(reminderRepository.countByActiveTrue()).thenReturn(0L);
+        when(reminderRepository.countDistinctActiveUsers()).thenReturn(0L);
+        when(reminderRepository.countActiveByLanguage()).thenReturn(List.of());
+        when(chatUserRepository.countBySource()).thenReturn(List.of());
+
+        var report = statisticsService.buildStatsReport();
+
+        assertThat(report).contains("Version: unknown");
     }
 
     @Test
