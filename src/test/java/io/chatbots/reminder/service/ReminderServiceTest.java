@@ -27,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -44,6 +47,7 @@ class ReminderServiceTest {
     @Spy  CronDescriptionService cronDescriptionService = new CronDescriptionService();
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock RateLimitService rateLimitService;
+    @Mock AiInteractionLogService aiInteractionLogService;
 
     private AppProperties appProperties;
     private ReminderService reminderService;
@@ -52,7 +56,8 @@ class ReminderServiceTest {
     void setUp() {
         appProperties = new AppProperties(10, 50);
         reminderService = new ReminderService(reminderRepository, chatUserRepository,
-            reminderAiService, promptSanitizerService, cronDescriptionService, appProperties, eventPublisher, rateLimitService);
+            reminderAiService, promptSanitizerService, cronDescriptionService, appProperties, eventPublisher,
+            rateLimitService, aiInteractionLogService);
         lenient().when(promptSanitizerService.sanitize(anyString(), anyBoolean())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -281,6 +286,27 @@ class ReminderServiceTest {
             .hasMessageContaining("daily limit");
 
         verify(reminderAiService, never()).parseReminder(anyString(), anyString(), any());
+        verify(aiInteractionLogService).record(eq("123"), eq(MessengerType.TELEGRAM), eq("Remind me"), any(),
+            any(), any(), isNull(), eq("RateLimitExceededException"), anyString(), anyLong());
+    }
+
+    @Test
+    void createReminder_success_logsInteractionWithAiResponse() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+        when(reminderRepository.countByChatUserAndActiveTrue(any())).thenReturn(0L);
+        var parseResult = new ReminderParseResult("Feed the leaven", null, true, "0 0 18 ? * FRI", null, null,
+            "Every Friday at 18:00", true, null, null, null, false);
+        when(reminderAiService.parseReminder(anyString(), anyString(), any())).thenReturn(parseResult);
+        when(reminderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        reminderService.createReminder(
+            new MessengerMessage("123", MessengerType.TELEGRAM, "Remind me every friday at 18", null, null), "en");
+
+        verify(aiInteractionLogService).record(eq("123"), eq(MessengerType.TELEGRAM),
+            eq("Remind me every friday at 18"), eq("Remind me every friday at 18"), any(), any(),
+            eq(parseResult), eq("OK"), isNull(), anyLong());
     }
 
     @Test

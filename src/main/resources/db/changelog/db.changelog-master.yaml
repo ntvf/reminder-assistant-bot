@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/changes/004-add-event-at.sql
   - include:
       file: db/changelog/changes/005-add-acquisition-source.sql
+  - include:
+      file: db/changelog/changes/006-add-ai-interactions.sql

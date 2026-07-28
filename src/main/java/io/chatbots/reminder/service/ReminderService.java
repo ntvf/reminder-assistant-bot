@@ -44,6 +44,7 @@ public class ReminderService {
     private final AppProperties appProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final RateLimitService rateLimitService;
+    private final AiInteractionLogService aiInteractionLogService;
 
     public ReminderService(
             ReminderRepository reminderRepository,
@@ -53,7 +54,8 @@ public class ReminderService {
             CronDescriptionService cronDescriptionService,
             AppProperties appProperties,
             ApplicationEventPublisher eventPublisher,
-            RateLimitService rateLimitService) {
+            RateLimitService rateLimitService,
+            AiInteractionLogService aiInteractionLogService) {
         this.reminderRepository = reminderRepository;
         this.chatUserRepository = chatUserRepository;
         this.reminderAiService = reminderAiService;
@@ -62,6 +64,7 @@ public class ReminderService {
         this.appProperties = appProperties;
         this.eventPublisher = eventPublisher;
         this.rateLimitService = rateLimitService;
+        this.aiInteractionLogService = aiInteractionLogService;
     }
 
     public String createReminder(MessengerMessage message, String languageCode) {
@@ -114,10 +117,34 @@ public class ReminderService {
     }
 
     private Validated validate(MessengerMessage message, String languageCode) {
+        var capture = new InteractionCapture();
+        var startedAt = System.currentTimeMillis();
+        try {
+            var validated = doValidate(message, languageCode, capture);
+            recordInteraction(message, capture, validated.errorText() == null ? "OK" : "REJECTED",
+                validated.errorText(), startedAt);
+            return validated;
+        } catch (RuntimeException e) {
+            recordInteraction(message, capture, e.getClass().getSimpleName(), e.getMessage(), startedAt);
+            throw e;
+        }
+    }
+
+    private void recordInteraction(MessengerMessage message, InteractionCapture capture,
+                                   String outcome, String errorText, long startedAt) {
+        aiInteractionLogService.record(message.chatId(), message.messengerType(), message.text(),
+            capture.cleanText, capture.languageCode, capture.timezone, capture.parseResult,
+            outcome, errorText, System.currentTimeMillis() - startedAt);
+    }
+
+    private Validated doValidate(MessengerMessage message, String languageCode, InteractionCapture capture) {
         var cleanText = promptSanitizerService.sanitize(message.text(), message.forwarded());
+        capture.cleanText = cleanText;
         log.info("Reminder request from chat {}: {}", message.chatId(), message.text());
 
         var chatUser = getOrCreateChatUser(message.chatId(), message.messengerType(), languageCode);
+        capture.timezone = chatUser.getTimezone();
+        capture.languageCode = chatUser.getLanguageCode();
         var userLanguageCode = chatUser.getLanguageCode();
 
         rateLimitService.checkAndIncrement(message.chatId(), message.messengerType(), userLanguageCode);
@@ -129,6 +156,7 @@ public class ReminderService {
         }
 
         var parseResult = reminderAiService.parseReminder(cleanText, chatUser.getTimezone(), userLanguageCode);
+        capture.parseResult = parseResult;
         if (parseResult == null) {
             return Validated.error(BotMessages.get(BotMessages.Key.WRONG, userLanguageCode));
         }
@@ -138,6 +166,7 @@ public class ReminderService {
             if (detected.length() > 2) detected = detected.substring(0, 2);
             if (SUPPORTED_LOCALES.contains(detected) && !detected.equals(userLanguageCode)) {
                 userLanguageCode = detected;
+                capture.languageCode = detected;
                 chatUser.setLanguageCode(detected);
                 chatUserRepository.save(chatUser);
             }
@@ -229,6 +258,13 @@ public class ReminderService {
     }
 
     public record LeadChoiceDraft(String reminderText, String eventText, LocalDateTime eventFireAt, String languageCode) {}
+
+    private static final class InteractionCapture {
+        private String cleanText;
+        private String languageCode;
+        private String timezone;
+        private ReminderParseResult parseResult;
+    }
 
     private record Validated(String errorText, ChatUser chatUser, String userLang,
                              ReminderParseResult parse, String scheduleDesc, List<ChainedReminder> chain) {
