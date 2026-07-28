@@ -432,10 +432,23 @@ public class ReminderService {
         return BotMessages.get(BotMessages.Key.TZ_UPDATED, chatUser.getLanguageCode(), timezone);
     }
 
-    @Transactional(readOnly = true)
-    public boolean isTimezoneConfirmed(String chatId, MessengerType messengerType) {
+    public void registerStart(String chatId, MessengerType messengerType, String languageCode, String source) {
+        var user = getOrCreateChatUser(chatId, messengerType, languageCode);
+        if (user.getSource() == null && source != null) {
+            user.setSource(source);
+            chatUserRepository.save(user);
+            log.info("Attributed chat {} ({}) to source {}", chatId, messengerType, source);
+        }
+    }
+
+    public boolean markTimezoneHintSent(String chatId, MessengerType messengerType) {
         return chatUserRepository.findByChatIdAndMessengerType(chatId, messengerType)
-            .map(ChatUser::isTimezoneConfirmed)
+            .filter(user -> !user.isTimezoneConfirmed() && !user.isTzHintSent())
+            .map(user -> {
+                user.setTzHintSent(true);
+                chatUserRepository.save(user);
+                return true;
+            })
             .orElse(false);
     }
 

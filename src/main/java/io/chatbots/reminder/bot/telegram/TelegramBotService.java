@@ -130,11 +130,11 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     private final TimezoneGeoService timezoneGeoService;
     private final AppProperties appProperties;
 
-    private final Map<String, MessengerMessage> pendingReminders = new java.util.concurrent.ConcurrentHashMap<>();
-
     private final Map<String, String> forwardTexts = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final Map<String, ReminderService.LeadChoiceDraft> leadDrafts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final int MAX_SOURCE_LENGTH = 64;
 
     private static final long TYPING_REFRESH_MS = 4000;
     private final ScheduledExecutorService typingExecutor = Executors.newScheduledThreadPool(2, r -> {
@@ -286,12 +286,10 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
         try {
             if (text.startsWith("/start")) {
                 var name = username != null ? "@" + username : "there";
-                if (reminderService.isTimezoneConfirmed(chatId, MessengerType.TELEGRAM)) {
-                    sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.START, displayLang, name), buildMainKeyboard(displayLang));
-                } else {
-                    send(chatId, BotMessages.get(BotMessages.Key.START, displayLang, name));
-                    sendTimezoneRequest(chatId, displayLang);
+                if (!isGroup) {
+                    reminderService.registerStart(chatId, MessengerType.TELEGRAM, languageCode, parseStartPayload(text));
                 }
+                sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.START, displayLang, name), buildMainKeyboard(displayLang));
             } else if (text.startsWith("/list")) {
                 var listText = reminderService.listReminders(chatId, MessengerType.TELEGRAM);
                 var reminders = reminderService.getActiveReminders(chatId, MessengerType.TELEGRAM);
@@ -312,22 +310,18 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             } else if (text.startsWith("/timezone ")) {
                 var tz = text.substring("/timezone ".length()).trim();
                 sendWithMarkup(chatId, reminderService.updateTimezone(chatId, MessengerType.TELEGRAM, tz), buildMainKeyboard(displayLang));
-                if (reminderService.isTimezoneConfirmed(chatId, MessengerType.TELEGRAM)) {
-                    replayPendingReminder(chatId, displayLang);
-                }
             } else if (text.startsWith("/stats")) {
                 send(chatId, statisticsService.buildStatsReport());
             } else if (text.startsWith("/")) {
                 send(chatId, BotMessages.get(BotMessages.Key.UNKNOWN_CMD, displayLang));
             } else if (!text.isBlank()) {
-                if (!reminderService.isTimezoneConfirmed(chatId, MessengerType.TELEGRAM)) {
-                    pendingReminders.put(chatId, messengerMessage);
-                    send(chatId, BotMessages.get(BotMessages.Key.TZ_NEEDED_FIRST, displayLang));
-                    sendTimezoneRequest(chatId, displayLang);
-                } else if (!isGroup && message.getForwardDate() != null) {
+                if (!isGroup && message.getForwardDate() != null) {
                     promptForwardLeadTime(chatId, text, displayLang);
                 } else {
                     handleReminderCreation(chatId, messengerMessage, languageCode, displayLang);
+                }
+                if (!isGroup) {
+                    sendTimezoneAssumptionHint(chatId, displayLang);
                 }
             }
         } catch (NumberFormatException e) {
@@ -344,10 +338,28 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
         }
     }
 
-    private void replayPendingReminder(String chatId, String displayLang) {
-        var pending = pendingReminders.remove(chatId);
-        if (pending == null) return;
-        handleReminderCreation(chatId, pending, displayLang, displayLang);
+    private static String parseStartPayload(String startCommand) {
+        var parts = startCommand.split("\\s+", 2);
+        if (parts.length < 2) return null;
+        var payload = parts[1].trim();
+        if (payload.isEmpty()) return null;
+        var sanitized = payload.replaceAll("[^A-Za-z0-9_-]", "");
+        if (sanitized.isEmpty()) return null;
+        return sanitized.length() > MAX_SOURCE_LENGTH ? sanitized.substring(0, MAX_SOURCE_LENGTH) : sanitized;
+    }
+
+    private void sendTimezoneAssumptionHint(String chatId, String displayLang) {
+        if (reminderService.getActiveReminderIds(chatId, MessengerType.TELEGRAM).isEmpty()) return;
+        if (!reminderService.markTimezoneHintSent(chatId, MessengerType.TELEGRAM)) return;
+
+        var tz = reminderService.getUserTimezone(chatId, MessengerType.TELEGRAM);
+        if (tz == null) return;
+        var keyboard = InlineKeyboardMarkup.builder().keyboard(List.of(new InlineKeyboardRow(List.of(
+            InlineKeyboardButton.builder()
+                .text(BotMessages.get(BotMessages.Key.BTN_CHANGE_TZ, displayLang))
+                .callbackData("tz:regions")
+                .build())))).build();
+        sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_ASSUMED, displayLang, tz), keyboard);
     }
 
     private void handleReminderCreation(String chatId, MessengerMessage message, String languageCode, String displayLang) {
@@ -449,6 +461,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             result = BotMessages.get(BotMessages.Key.WRONG, displayLang);
         }
         editText(chatId, messageId, result);
+        sendTimezoneAssumptionHint(chatId, displayLang);
     }
 
     private void handleEventLeadTime(String chatId, int messageId, String option, String languageCode) {
@@ -484,6 +497,7 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
             result = BotMessages.get(BotMessages.Key.WRONG, displayLang);
         }
         editText(chatId, messageId, result);
+        sendTimezoneAssumptionHint(chatId, displayLang);
     }
 
     private Runnable startTyping(String chatId) {
@@ -719,7 +733,6 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
                 var displayLang = profileLang != null ? profileLang : languageCode;
                 removeInlineKeyboard(chatId, messageId);
                 sendWithMarkup(chatId, BotMessages.get(BotMessages.Key.TZ_CONFIRMED, displayLang, tz), buildMainKeyboard(displayLang));
-                replayPendingReminder(chatId, displayLang);
             } catch (Exception e) {
                 log.warn("Failed to confirm timezone {} for chat {}: {}", tz, chatId, e.getMessage());
             }

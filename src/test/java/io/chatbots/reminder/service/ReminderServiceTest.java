@@ -283,6 +283,67 @@ class ReminderServiceTest {
         verify(reminderAiService, never()).parseReminder(anyString(), anyString(), any());
     }
 
+    @Test
+    void registerStart_newUser_storesSource() {
+        when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.empty());
+        when(chatUserRepository.save(any(ChatUser.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        reminderService.registerStart("123", MessengerType.TELEGRAM, "uk", "ads_ua_1");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ChatUser.class);
+        verify(chatUserRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        assertThat(captor.getValue().getSource()).isEqualTo("ads_ua_1");
+        assertThat(captor.getValue().getTimezone()).isEqualTo("Europe/Kiev");
+    }
+
+    @Test
+    void registerStart_existingSource_isNotOverwritten() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        chatUser.setSource("ads_ua_1");
+        when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+
+        reminderService.registerStart("123", MessengerType.TELEGRAM, "uk", "ads_ua_2");
+
+        assertThat(chatUser.getSource()).isEqualTo("ads_ua_1");
+        verify(chatUserRepository, never()).save(any(ChatUser.class));
+    }
+
+    @Test
+    void registerStart_noPayload_leavesSourceNull() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        when(chatUserRepository.findByChatIdAndMessengerTypeIncludeDeleted("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+
+        reminderService.registerStart("123", MessengerType.TELEGRAM, "uk", null);
+
+        assertThat(chatUser.getSource()).isNull();
+    }
+
+    @Test
+    void markTimezoneHintSent_firstCallOnly_returnsTrue() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        when(chatUserRepository.findByChatIdAndMessengerType("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+        when(chatUserRepository.save(chatUser)).thenReturn(chatUser);
+
+        assertThat(reminderService.markTimezoneHintSent("123", MessengerType.TELEGRAM)).isTrue();
+        assertThat(chatUser.isTzHintSent()).isTrue();
+        assertThat(reminderService.markTimezoneHintSent("123", MessengerType.TELEGRAM)).isFalse();
+    }
+
+    @Test
+    void markTimezoneHintSent_timezoneAlreadyConfirmed_returnsFalse() {
+        var chatUser = mockChatUser("123", MessengerType.TELEGRAM);
+        chatUser.setTimezoneConfirmed(true);
+        when(chatUserRepository.findByChatIdAndMessengerType("123", MessengerType.TELEGRAM))
+            .thenReturn(Optional.of(chatUser));
+
+        assertThat(reminderService.markTimezoneHintSent("123", MessengerType.TELEGRAM)).isFalse();
+        assertThat(chatUser.isTzHintSent()).isFalse();
+    }
+
     private ChatUser mockChatUser(String chatId, MessengerType type) {
         return new ChatUser(chatId, type, "en");
     }

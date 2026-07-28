@@ -41,6 +41,12 @@ public class ChatUser {
     @Column(name = "longitude")
     private Double longitude;
 
+    @Column(name = "source", length = 64)
+    private String source;
+
+    @Column(name = "tz_hint_sent", nullable = false)
+    private boolean tzHintSent = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -107,6 +113,22 @@ public class ChatUser {
 
     public void setLongitude(Double longitude) {
         this.longitude = longitude;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public boolean isTzHintSent() {
+        return tzHintSent;
+    }
+
+    public void setTzHintSent(boolean tzHintSent) {
+        this.tzHintSent = tzHintSent;
     }
 
     public LocalDateTime getCreatedAt() {

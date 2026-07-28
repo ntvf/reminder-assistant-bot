@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/changes/003-add-event-text.sql
   - include:
       file: db/changelog/changes/004-add-event-at.sql
+  - include:
+      file: db/changelog/changes/005-add-acquisition-source.sql

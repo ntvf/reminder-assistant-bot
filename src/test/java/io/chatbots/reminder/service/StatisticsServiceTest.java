@@ -34,10 +34,32 @@ class StatisticsServiceTest {
             new Object[]{"de", 20L},
             new Object[]{null, 20L}
         ));
+        when(chatUserRepository.countBySource()).thenReturn(List.of());
 
         var report = statisticsService.buildStatsReport();
 
         assertThat(report).contains("50").contains("120").contains("30").contains("en").contains("de").contains("unknown");
+    }
+
+    @Test
+    void buildStatsReport_withSources_showsActivationRate() {
+        when(chatUserRepository.count()).thenReturn(40L);
+        when(chatUserRepository.countByMessengerType(MessengerType.TELEGRAM)).thenReturn(40L);
+        when(reminderRepository.countByActiveTrue()).thenReturn(15L);
+        when(reminderRepository.countDistinctActiveUsers()).thenReturn(12L);
+        when(reminderRepository.countActiveByLanguage()).thenReturn(List.of());
+        when(chatUserRepository.countBySource()).thenReturn(List.of(
+            new Object[]{"ads_ua_1", 30L},
+            new Object[]{"ads_en_1", 10L}
+        ));
+        when(reminderRepository.countActivatedUsersBySource()).thenReturn(List.<Object[]>of(
+            new Object[]{"ads_ua_1", 12L}
+        ));
+
+        var report = statisticsService.buildStatsReport();
+
+        assertThat(report).contains("ads_ua_1: 12 / 30 (40%)");
+        assertThat(report).contains("ads_en_1: 0 / 10 (0%)");
     }
 
     @Test
@@ -47,6 +69,7 @@ class StatisticsServiceTest {
         when(reminderRepository.countByActiveTrue()).thenReturn(0L);
         when(reminderRepository.countDistinctActiveUsers()).thenReturn(0L);
         when(reminderRepository.countActiveByLanguage()).thenReturn(List.of());
+        when(chatUserRepository.countBySource()).thenReturn(List.of());
 
         var report = statisticsService.buildStatsReport();
         assertThat(report).contains("Statistics");

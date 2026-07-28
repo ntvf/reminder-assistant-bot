@@ -18,4 +18,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     @Query("SELECT COUNT(DISTINCT r.chatUser.id) FROM Reminder r WHERE r.active = true")
     long countDistinctActiveUsers();
+
+    @Query("SELECT r.chatUser.source, COUNT(DISTINCT r.chatUser.id) FROM Reminder r "
+        + "WHERE r.active = true AND r.chatUser.source IS NOT NULL GROUP BY r.chatUser.source")
+    List<Object[]> countActivatedUsersBySource();
 }
