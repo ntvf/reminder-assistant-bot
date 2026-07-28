@@ -35,6 +35,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.location.Location;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
@@ -135,6 +136,8 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     private final Map<String, ReminderService.LeadChoiceDraft> leadDrafts = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final int MAX_SOURCE_LENGTH = 64;
+
+    private static final List<Long> BLOCKED_RETRY_DELAYS_MS = List.of(750L, 1500L, 3000L);
 
     private static final long TYPING_REFRESH_MS = 4000;
     private final ScheduledExecutorService typingExecutor = Executors.newScheduledThreadPool(2, r -> {
@@ -831,38 +834,54 @@ public class TelegramBotService implements SpringLongPollingBot, MessengerSender
     }
 
     private void sendWithMarkup(String chatId, String text, org.telegram.telegrambots.meta.api.interfaces.BotApiObject markup) {
-        try {
-            var builder = SendMessage.builder().chatId(chatId).text(text).parseMode("HTML");
-            if (markup instanceof org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard kb) {
-                builder.replyMarkup(kb);
-            } else if (markup instanceof InlineKeyboardMarkup inlineKb) {
-                builder.replyMarkup(inlineKb);
-            }
-            telegramClient.execute(builder.build());
-        } catch (TelegramApiException e) {
-            log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
+        var builder = SendMessage.builder().chatId(chatId).text(text).parseMode("HTML");
+        if (markup instanceof org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard kb) {
+            builder.replyMarkup(kb);
+        } else if (markup instanceof InlineKeyboardMarkup inlineKb) {
+            builder.replyMarkup(inlineKb);
         }
+        executeSend(chatId, builder.build());
     }
 
     private Integer sendReturningId(String chatId, String text) {
-        try {
-            var sent = telegramClient.execute(
-                SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").build());
-            return sent != null ? sent.getMessageId() : null;
-        } catch (TelegramApiException e) {
-            log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
-            return null;
-        }
+        var sent = executeSend(chatId, SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").build());
+        return sent != null ? sent.getMessageId() : null;
     }
 
     private Integer sendReturningIdWithMarkup(String chatId, String text, InlineKeyboardMarkup keyboard) {
+        var sent = executeSend(chatId,
+            SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").replyMarkup(keyboard).build());
+        return sent != null ? sent.getMessageId() : null;
+    }
+
+    private Message executeSend(String chatId, SendMessage request) {
+        for (var attempt = 0; ; attempt++) {
+            try {
+                return telegramClient.execute(request);
+            } catch (TelegramApiException e) {
+                if (attempt < BLOCKED_RETRY_DELAYS_MS.size() && isTransientBlock(e)) {
+                    log.warn("Telegram reports chat {} blocked, retrying send in {} ms",
+                        chatId, BLOCKED_RETRY_DELAYS_MS.get(attempt));
+                    if (sleep(BLOCKED_RETRY_DELAYS_MS.get(attempt))) continue;
+                }
+                log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
+                return null;
+            }
+        }
+    }
+
+    private static boolean isTransientBlock(TelegramApiException e) {
+        var msg = e.getMessage();
+        return msg != null && msg.contains("bot was blocked by the user");
+    }
+
+    private static boolean sleep(long millis) {
         try {
-            var sent = telegramClient.execute(
-                SendMessage.builder().chatId(chatId).text(text).parseMode("HTML").replyMarkup(keyboard).build());
-            return sent != null ? sent.getMessageId() : null;
-        } catch (TelegramApiException e) {
-            log.error("Failed to send Telegram message to {}: {}", chatId, e.getMessage());
-            return null;
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
